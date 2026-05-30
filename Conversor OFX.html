@@ -1,0 +1,1723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extrato → OFX</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424;
+    --border: #2e2e2e; --border2: #3a3a3a; --text: #f0ede8;
+    --muted: #888; --accent: #d4a843; --accent-dim: #7a5e1e;
+    --green: #4caf82; --red: #e05555; --radius: 8px;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Georgia', serif; min-height: 100vh; padding: 40px 20px; }
+  .container { max-width: 960px; margin: 0 auto; }
+  header { margin-bottom: 48px; }
+  .logo { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .logo h1 { font-size: 28px; font-weight: 400; letter-spacing: -0.5px; }
+  .logo .arrow { font-family: var(--mono); font-size: 20px; color: var(--accent); }
+  .logo .tag { font-family: var(--mono); font-size: 12px; background: var(--accent-dim); color: var(--accent); padding: 2px 8px; border-radius: 3px; letter-spacing: 1px; text-transform: uppercase; }
+  header p { font-size: 14px; color: var(--muted); font-style: italic; }
+  .section { margin-bottom: 32px; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 0.5px solid var(--border); }
+  .section-title { font-size: 13px; font-family: var(--mono); color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; }
+  .badge { font-family: var(--mono); font-size: 11px; background: var(--surface2); color: var(--muted); padding: 2px 8px; border-radius: 3px; border: 0.5px solid var(--border); }
+  .badge.ok  { color: var(--green); border-color: var(--green); }
+  .badge.err { color: var(--red);   border-color: var(--red); }
+  .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .field label { display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .field input, .field select { width: 100%; background: var(--surface2); border: 0.5px solid var(--border2); color: var(--text); padding: 8px 10px; border-radius: 4px; font-size: 13px; font-family: var(--mono); outline: none; transition: border-color 0.2s; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select option { background: var(--surface2); }
+  .drop-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 60px 40px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface); margin-bottom: 32px; position: relative; }
+  .drop-zone.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+  .drop-zone:hover:not(.disabled), .drop-zone.over { border-color: var(--accent); background: #1f1b12; }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 36px; margin-bottom: 16px; display: block; opacity: 0.5; }
+  .drop-zone h2 { font-size: 18px; font-weight: 400; margin-bottom: 8px; }
+  .drop-zone p { font-size: 13px; color: var(--muted); }
+  .bank-hint { font-size: 11px; color: var(--accent); font-family: var(--mono); margin-top: 8px; display: block; }
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 0.5px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+  th { background: var(--surface2); color: var(--muted); font-weight: 400; letter-spacing: 1px; text-transform: uppercase; font-size: 10px; padding: 10px 12px; text-align: left; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 0.5px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  td input, td select { background: transparent; border: none; color: inherit; font-family: var(--mono); font-size: 12px; width: 100%; outline: none; padding: 2px 4px; border-radius: 3px; }
+  td input:focus, td select:focus { background: var(--surface); outline: 1px solid var(--accent-dim); }
+  .amount-pos { color: var(--green); }
+  .amount-neg { color: var(--red); }
+  .btn-row { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
+  button { font-family: var(--mono); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 10px 20px; border-radius: 4px; cursor: pointer; border: 0.5px solid var(--border2); transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #0f0f0f; border-color: var(--accent); font-weight: 700; }
+  .btn-primary:hover { background: #e8b845; }
+  .btn-secondary { background: transparent; color: var(--muted); }
+  .btn-secondary:hover { background: var(--surface2); color: var(--text); }
+  .btn-danger { background: transparent; color: var(--red); border-color: var(--red); padding: 4px 8px; font-size: 10px; }
+  .btn-danger:hover { background: #3a1a1a; }
+  .progress-bar { height: 2px; background: var(--border); border-radius: 1px; margin-bottom: 16px; overflow: hidden; display: none; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+  .log { font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 12px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 4px; max-height: 120px; overflow-y: auto; display: none; }
+  .log p { margin: 2px 0; }
+  .log .ok   { color: var(--green); }
+  .log .warn { color: var(--accent); }
+  .log .err  { color: var(--red); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+  .stat .label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .stat .value { font-family: var(--mono); font-size: 18px; font-weight: 400; }
+  .hidden { display: none !important; }
+  .tip { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 8px; }
+  .add-row-btn { margin-top: 12px; background: transparent; border: 0.5px dashed var(--border2); color: var(--muted); width: 100%; padding: 8px; font-size: 11px; }
+  .add-row-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--accent-dim); color: var(--accent); border-radius: 50%; font-size: 10px; font-family: var(--mono); margin-right: 6px; }
+  .conv-badges { display: flex; gap: 8px; }
+  .dd-wrap { position: relative; }
+  .dd-trigger { display: flex; align-items: center; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 4px; cursor: pointer; transition: border-color 0.2s; }
+  .dd-trigger:focus-within { border-color: var(--accent); }
+  .dd-trigger input { background: transparent; border: none; color: var(--text); padding: 8px 10px; font-size: 13px; font-family: var(--mono); outline: none; flex: 1; cursor: pointer; width: 100%; }
+  .dd-trigger input::placeholder { color: var(--muted); }
+  .dd-chevron { font-size: 18px; color: var(--muted); padding: 0 10px; user-select: none; line-height: 1; transition: transform 0.2s; }
+  .dd-chevron.open { transform: rotate(180deg); }
+  .dd-list { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 4px; max-height: 220px; overflow-y: auto; z-index: 100; }
+  .dd-list.open { display: block; }
+  .dd-item { padding: 9px 12px; font-size: 13px; font-family: var(--mono); color: var(--text); cursor: pointer; }
+  .dd-item:hover, .dd-item.focused { background: var(--accent-dim); color: var(--accent); }
+  .dd-item.selected { color: var(--accent); }
+  .dd-empty { padding: 9px 12px; font-size: 13px; font-family: var(--mono); color: var(--muted); font-style: italic; }
+  .scroll-btn { position: fixed; right: 24px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 20px; transition: background 0.2s, color 0.2s, opacity 0.2s; z-index: 200; opacity: 0.7; }
+  .scroll-btn:hover { background: var(--accent-dim); color: var(--accent); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <h1>Extrato</h1><span class="arrow">→</span><h1>OFX</h1>
+      <span class="tag">Conversor</span>
+    </div>
+    <p>Selecione o banco, importe o extrato em PDF e exporte no formato OFX.</p>
+  </header>
+
+  <!-- STEP 1 -->
+  <div class="section">
+    <div class="section-header"><span class="section-title"><span class="step-num">1</span>Banco</span></div>
+    <div class="config-grid">
+      <div class="field">
+        <label>Selecione o banco</label>
+        <div class="dd-wrap" id="ddWrap">
+          <div class="dd-trigger" id="ddTrigger">
+            <input type="text" id="ddInput" placeholder="Pesquisar banco..." autocomplete="off">
+            <span class="dd-chevron" id="ddChevron">&#8964;</span>
+          </div>
+          <div class="dd-list" id="ddList"></div>
+        </div>
+        <input type="hidden" id="bankSelect" value="">
+      </div>
+      <div class="field hidden" id="yearField">
+        <label>Ano do extrato</label>
+        <input type="number" id="yearInput" value="2026" min="2000" max="2099">
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="section">
+    <div class="section-header"><span class="section-title"><span class="step-num">2</span>Arquivo</span></div>
+    <div class="drop-zone disabled" id="dropZone">
+      <input type="file" id="fileInput" accept=".pdf">
+      <span class="drop-icon">⬆</span>
+      <h2>Arraste o PDF do extrato aqui</h2>
+      <p>ou clique para selecionar o arquivo</p>
+      <span class="bank-hint" id="bankHint">← Selecione o banco primeiro</span>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="section hidden" id="configSection">
+    <div class="section-header"><span class="section-title"><span class="step-num">3</span>Configuração da conta</span></div>
+    <div class="config-grid">
+      <div class="field"><label>Número da conta</label><input type="text" id="cfgAccount" placeholder="Ex: 12345-6"></div>
+      <div class="field"><label>Agência</label><input type="text" id="cfgBranch" placeholder="Ex: 0001"></div>
+      <div class="field"><label>Banco (código)</label><input type="text" id="cfgBank" placeholder="Ex: 341"></div>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="section hidden" id="tableSection">
+    <div class="section-header">
+      <span class="section-title"><span class="step-num">4</span>Transações detectadas</span>
+      <div class="conv-badges">
+        <span class="badge ok"  id="txCount">0 convertidas</span>
+        <span class="badge err hidden" id="txFailed">0 falhas</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="label">Total créditos</div><div class="value amount-pos" id="statCredits">R$ 0,00</div></div>
+      <div class="stat"><div class="label">Total débitos</div><div class="value amount-neg" id="statDebits">R$ 0,00</div></div>
+      <div class="stat"><div class="label">Saldo período</div><div class="value" id="statBalance">R$ 0,00</div></div>
+    </div>
+
+    <p class="tip">Verifique e edite os campos antes de exportar. Datas no formato DD/MM/AAAA.</p><br>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Valor (R$)</th><th>Tipo</th><th></th></tr></thead>
+        <tbody id="txBody"></tbody>
+      </table>
+    </div>
+
+    <button class="add-row-btn" onclick="addRow()">+ Adicionar linha</button>
+
+    <div class="btn-row">
+      <button class="btn-primary" onclick="exportOFX()">⬇ Exportar OFX</button>
+      <button class="btn-secondary" onclick="resetAll()">Limpar</button>
+    </div>
+  </div>
+
+<button class="scroll-btn" onclick="window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})" title="Ir ao final da página">&#8964;</button>
+</div>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let transactions  = [];
+let parseFailures = 0;
+
+const BANKS = {
+  asaas:     { name: 'Asaas',                  code: '461' },
+  bb:        { name: 'Banco do Brasil',         code: '001' },
+  bradesco:  { name: 'Bradesco',                code: '237' },
+  c6bank:    { name: 'C6 Bank',                 code: '336' },
+  caixa:     { name: 'Caixa Econômica Federal', code: '104' },
+  daycoval:  { name: 'Daycoval',                code: '707' },
+  inter:     { name: 'Banco Inter',             code: '077' },
+  itau_bba:  { name: 'Itaú BBA',                code: '341' },
+  nubank:    { name: 'Nubank',                  code: '260' },
+  pagbank:   { name: 'PagBank / PagSeguro',     code: '290' },
+  santander: { name: 'Santander',               code: '033' },
+  sicoob:    { name: 'Sicoob',                  code: '756' },
+  sicoob_b:  { name: 'Sicoob Internet Banking', code: '756' },
+  sicredi:   { name: 'Sicredi',                 code: '748' },
+  stone:     { name: 'Stone',                   code: '197' },
+  unicred:   { name: 'Unicred',                 code: '136' },
+  viacredi:  { name: 'Viacredi / Sistema Ailos', code: '085' },
+};
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+const moneyRe    = () => /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
+const dateFullRe =  /^(\d{2}\/\d{2}\/\d{4})\s/;
+
+function parseAmt(s) {
+  if (!s) return NaN;
+  return parseFloat(String(s).replace(/\s/g,'').replace(/\./g,'').replace(',','.').trim());
+}
+function normDate(d) {
+  const p = (d||'').split('/');
+  if (p.length !== 3) return d||'01/01/1970';
+  let [dd,mm,yy] = p;
+  if (yy.length === 2) yy = '20'+yy;
+  return dd.padStart(2,'0')+'/'+mm.padStart(2,'0')+'/'+yy;
+}
+function escH(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function mkTx(date, desc, amount) {
+  return { date, desc:(desc||'Transação').trim().slice(0,80)||'Transação', amount, type: amount>=0?'CREDIT':'DEBIT' };
+}
+
+// ── Parsers ───────────────────────────────────────────────────────────────
+
+/* Itaú / Itaú BBA
+   Suporta descrição em múltiplas linhas:
+   DD/MM/YYYY TIPO (sem valor) → próximas linhas acumulam até achar valor
+   Descrição = todas as partes de texto antes dos valores, sem CNPJ/CPF/docs
+*/
+function parseItauBBA(lines) {
+  const tx = []; let fail = 0;
+  const skipRe = /SALDO\s+(ANTERIOR|TOTAL\s+DISPONÍVEL|MOVIMENTAÇÃO|APLIC\.?\s*AUT\.?|DIA\b)|RENDIMENTOS REND PAGO|ITAU INFINIT|JR ACOES ITAU|^SAC\s|^Ouvidoria|^Em caso|^Fale com|^Reclamações/i;
+
+  let lastDate = null;
+  let pendParts = [];  // accumulated text parts
+
+  const commit = (date, parts) => {
+    const text = parts.join(' ');
+    if (skipRe.test(text)) return;
+    const amts = [...text.matchAll(moneyRe())].map(m => m[0]);
+    if (!amts.length) { fail++; return; }
+    const val = parseAmt(amts[amts.length - 1]);
+    if (isNaN(val) || val === 0) { fail++; return; }
+    const desc = text
+      .replace(dateFullRe, '')
+      .replace(moneyRe(), '')
+      .replace(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, '')
+      .replace(/\d{3}\.\d{3}\.\d{3}-\d{2}/g, '')
+      .replace(/\d{4}\.\d{5}-\d+/g, '')
+      .replace(/\b\d{6,}\b/g, '')
+      .replace(/\s+/g, ' ').trim().slice(0, 80) || 'Transação';
+    tx.push(mkTx(normDate(date), desc, val));
+  };
+
+  for (const line of lines) {
+    if (skipRe.test(line)) { if (pendParts.length) { commit(lastDate, pendParts); pendParts=[]; } continue; }
+    const dm = line.match(dateFullRe);
+    if (dm) {
+      if (pendParts.length) { commit(lastDate, pendParts); pendParts = []; }
+      lastDate = dm[1];
+      if ([...line.matchAll(moneyRe())].length >= 1) {
+        commit(lastDate, [line]);
+      } else {
+        pendParts = [line];
+      }
+    } else if (lastDate) {
+      pendParts.push(line);
+      if ([...pendParts.join(' ').matchAll(moneyRe())].length >= 1) {
+        commit(lastDate, pendParts);
+        pendParts = [];
+      }
+    }
+  }
+  if (pendParts.length) commit(lastDate, pendParts);
+  return { transactions: tx, failures: fail };
+}
+
+/* Daycoval */
+function parseDaycoval(lines, year) {
+  const tx = []; let fail = 0;
+  const skip = /^Saldo\s+Anterior|Impressão realizada|Os saldos acima/i;
+  let yr = year || new Date().getFullYear();
+  for (const l of lines) { const m=l.match(/\b(20\d{2})\b/); if(m){yr=m[1];break;} }
+
+  const dRe = /^(\d{2}\/\d{2})\s+/;
+  for (const line of lines) {
+    if (skip.test(line)) continue;
+    const dm = line.match(dRe);
+    if (!dm) continue;
+    const [dd,mm] = dm[1].split('/');
+    const negM = [...line.matchAll(/-\s*R\$\s*([\d.]+,\d{2})/g)];
+    const posM = [...line.matchAll(/(?<![–—\-]\s*)R\$\s*([\d.]+,\d{2})/g)];
+    let val = NaN;
+    if (negM.length) val = -parseAmt(negM[negM.length-1][1]);
+    else if (posM.length) val = parseAmt(posM[posM.length-1][1]);
+    if (isNaN(val)||val===0) { fail++; continue; }
+    const desc = line.replace(dRe,'').replace(/-?\s*R\$\s*[\d.]+,\d{2}/g,'').replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+    tx.push(mkTx(`${dd}/${mm}/${yr}`, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Caixa Econômica Federal */
+function parseCaixa(lines) {
+  const tx = []; let fail = 0;
+  const rowRe = /(\d{1,3}(?:\.\d{3})*,\d{2})\s+(C|D)\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+(C|D)\s*$/;
+  const skip  = /SALDO DIA|SALDO ANTERIOR/i;
+  for (const line of lines) {
+    if (!dateFullRe.test(line)||skip.test(line)) continue;
+    const dm = line.match(dateFullRe);
+    const am = line.match(rowRe);
+    if (!dm||!am) { fail++; continue; }
+    const val = parseAmt(am[1])*(am[2]==='D'?-1:1);
+    if (isNaN(val)||val===0) { fail++; continue; }
+    const desc = line.replace(dateFullRe,'').replace(/^\d+\s+/,'').replace(rowRe,'').replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+    tx.push(mkTx(normDate(dm[1]), desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Bradesco
+   Descrição pode estar em 2 linhas:
+   DD/MM/YYYY TIPO_DESC (sem valor)
+   COMPLEMENTO_DESC  [DOC] VALOR SALDO
+   Ou linha independente sem data: DATA_DESC [DOC] VALOR SALDO (herda última data)
+*/
+function parseBradesco(lines) {
+  const tx = []; let fail = 0;
+  const skip = /SALDO\s+(ANTERIOR|INVEST|DIA)|Últimos Lançamentos|Saldos Invest|^Data\s+Lançamento|^Agência|^Total\b|^Os dados|^Folha|^Extrato Mensal/i;
+
+  let lastDate = null;
+  let pendDesc = null;
+
+  const commit = (date, fullText) => {
+    if (skip.test(fullText)) return;
+    const amts = [...fullText.matchAll(moneyRe())].map(m => m[0]);
+    if (!amts.length) { fail++; return; }
+    const valStr = amts.length >= 2 ? amts[amts.length - 2] : amts[amts.length - 1];
+    const val = parseAmt(valStr);
+    if (isNaN(val) || val === 0) { fail++; return; }
+    const desc = fullText
+      .replace(dateFullRe, '')
+      .replace(moneyRe(), '')
+      .replace(/\b\d{4,10}\b/g, '')
+      .replace(/\s+/g, ' ').trim().slice(0, 80) || 'Transação';
+    tx.push(mkTx(normDate(date), desc, val));
+  };
+
+  for (const line of lines) {
+    if (skip.test(line)) { pendDesc = null; continue; }
+    const dm = line.match(dateFullRe);
+    const hasVal = [...line.matchAll(moneyRe())].length > 0;
+
+    if (dm) {
+      if (pendDesc !== null) { fail++; pendDesc = null; }
+      lastDate = dm[1];
+      if (hasVal) {
+        commit(lastDate, line);
+      } else {
+        pendDesc = line.replace(dateFullRe, '').trim();
+      }
+    } else if (hasVal && lastDate) {
+      const full = pendDesc ? (pendDesc + ' ' + line) : line;
+      commit(lastDate, full);
+      pendDesc = null;
+    } else if (pendDesc !== null && line.trim()) {
+      pendDesc += ' ' + line.trim();
+    }
+  }
+  return { transactions: tx, failures: fail };
+}
+
+/* Banco do Brasil */
+/* Banco do Brasil — detecta layout automaticamente:
+   Layout A (antigo): DD/MM/YYYY AGENCIA LOTE TIPO HISTORICO DOC VALOR C|D
+   Layout B (novo):   VALOR (+/-) DD/MM/YYYY LOTE [DOC] [HIST...]
+*/
+function parseBB(lines) {
+  const isNew = lines.some(l => /\d{1,3}(?:\.\d{3})*,\d{2}\s+\([+\-]\)/.test(l.trim()));
+  return isNew ? parseBBNew(lines) : parseBBOld(lines);
+}
+
+/* Banco do Brasil — Layout A (formato antigo) */
+function parseBBOld(lines) {
+  const tx = []; let fail = 0;
+  const pfxRe = /^(\d{2}\/\d{2}\/\d{4})\s+\d{4}\s+\d{5}\s+\d{3}\s+/;
+  const valRe = /(\d{1,3}(?:\.\d{3})*,\d{2})\s+([CD])\s*$/;
+  const skip  = /BB Rende Fácil|Rende Facil|S A L D O|Transação efetuada|SAC\s+\d|Ouvidoria/i;
+
+  for (let i=0; i<lines.length; i++) {
+    const line = lines[i];
+    if (skip.test(line)) continue;
+    const dm = line.match(pfxRe);
+    if (!dm) continue;
+    const vm = line.match(valRe);
+    if (!vm) { fail++; continue; }
+    const val = parseAmt(vm[1])*(vm[2]==='D'?-1:1);
+    if (isNaN(val)||val===0) { fail++; continue; }
+
+    let hist = line
+      .replace(pfxRe,'').replace(valRe,'')
+      .replace(/\s+\d{6,12}\s*/,' ')
+      .replace(/\s+\d{2}\.\d{3}\.\d{3}\s*/,' ')
+      .replace(/\s+/g,' ').trim();
+
+    if (i+1<lines.length) {
+      const nxt = lines[i+1];
+      if (!pfxRe.test(nxt)&&!skip.test(nxt)&&!dateFullRe.test(nxt)) {
+        const name = nxt
+          .replace(/^\s*\d{3}\s+\d{4}\s+/,'')
+          .replace(/^\s*\d{4}\s+\d{5}\s+\d{3}\s+/,'')
+          .replace(/\d{14}\s*/g,'')
+          .replace(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s*/g,'')
+          .replace(/\s+/g,' ').trim();
+        if (name&&name.length>1) { hist=(hist+' '+name).trim().slice(0,80); i++; }
+      }
+    }
+    tx.push(mkTx(normDate(dm[1]), hist||'Transação', val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Banco do Brasil — Layout B (novo: Extrato de Conta Corrente)
+   Formato real (pdf.js extrai Y decrescente, colunas concatenadas):
+     [hist antes da data]          ← linha antes da data (opcional)
+     DD/MM/YYYY [hist_na_data]     ← data sozinha ou com hist
+     VALOR (+/-) LOTE [DOC] [hist] ← valor SEMPRE na linha seguinte à data
+     [hist depois do valor]        ← detalhe adicional (opcional)
+   Estratégia: pares (data[i], valor[i+1]) em cleanLines
+*/
+function parseBBNew(lines) {
+  const tx = []; let fail = 0;
+  const skip = /Saldo do dia|Saldo Anterior|S\s+A\s+L\s+D\s+O|Lançamentos Futuros|Total Aplicações|Sujeitos a confirmação|^Extrato de Conta|^Cliente\s|^Agência:|^Lançamentos$|^Dia\s+Lote|^Saldo\b|^Juros|^IOF|^Data de|^00\/00\/0000/i;
+  const valRe  = /^([\d.]+,\d{2})\s+\(([+\-])\)\s+(.*)/;
+  const dateRe = /^(\d{2}\/\d{2}\/\d{4})\s*(.*)/;
+
+  const cls = lines.map(l => l.trim()).filter(l => l && !/^\d{1,2}$/.test(l) && !skip.test(l));
+
+  // Encontra todos os pares (data[i], valor[i+1])
+  const pairs = [];
+  for (let i = 0; i < cls.length - 1; i++) {
+    const dm = cls[i].match(dateRe);
+    if (!dm) continue;
+    const vm = cls[i + 1].match(valRe);
+    if (!vm) continue;
+    pairs.push({ di: i, vi: i + 1, date: dm[1], histOnDate: dm[2].trim(), vm });
+  }
+
+  const isValLine  = l => valRe.test(l);
+  const isDateLine = l => dateRe.test(l);
+
+  for (let pi = 0; pi < pairs.length; pi++) {
+    const { di, vi, date, histOnDate, vm } = pairs[pi];
+    const val = parseAmt(vm[1]) * (vm[2] === '+' ? 1 : -1);
+    if (isNaN(val)) { fail++; continue; }
+
+    // hist da linha de valor: após remover lote + doc opcional
+    const afterVal = vm[3].replace(/^\d+(?:\s+\d+)?\s*/, '').trim();
+
+    // preHist: linha imediatamente antes da data (se não for data nem valor)
+    const prevLine = di > 0 ? cls[di - 1] : '';
+    const preHist = (prevLine && !isDateLine(prevLine) && !isValLine(prevLine)) ? [prevLine] : [];
+
+    // postHist: entre valor e preHist da próxima transação
+    const nextDi = pi + 1 < pairs.length ? pairs[pi + 1].di : cls.length;
+    const postHist = cls.slice(vi + 1, nextDi - 1).filter(l => !isDateLine(l) && !isValLine(l));
+
+    const descParts = [...preHist, histOnDate, afterVal, ...postHist].filter(Boolean);
+    const desc = descParts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Transação';
+    tx.push(mkTx(normDate(date), desc, val));
+  }
+  return { transactions: tx, failures: fail };
+}
+
+/* Stone — parser por coordenadas X/Y
+   Colunas (página ~599pt):
+     DATA:        X < 67
+     TIPO:        67 <= X < 112
+     DESCRIÇÃO:   112 <= X < 285
+     VALOR:       285 <= X < 355
+     SALDO:       355 <= X < 422  (ignorado)
+     CONTRAPARTE: X >= 422        (ignorada)
+   Agrupa items por Y (tolerância ±2pt), depois agrupa linhas físicas
+   em blocos de transação usando DATA + TIPO como âncora.
+*/
+function parseStone(lines, items) {
+  // Fallback para texto puro se não houver items (não deve ocorrer)
+  if (!items || !items.length) return parseStoneText(lines);
+
+  const tx = []; let fail = 0;
+  const xTipo=67, xDesc=112, xValor=285, xSaldo=355, xContra=422;
+  const TOL = 2;
+  const dateRe = /^\d{2}\/\d{2}\/\d{2}$/;
+  const amtRe  = /^[\d.]+,\d{2}$/;
+  const skipRe = /^(DATA|TIPO|DESCRI|VALOR|SALDO|CONTRAPARTE|Período|Extrato|Stone|ELO|Página|Emitido|Nome|Documento|Instituição|Agência|Conta|0001$)/i;
+
+  // 1. Agrupar items por linha Y (tolerância ±2)
+  const rowMap = {};
+  items.forEach(it => {
+    const y = it.transform[5];
+    const x = it.transform[4];
+    const s = (it.str || '').trim();
+    if (!s) return;
+    // encontra bucket Y existente dentro da tolerância
+    let key = null;
+    for (const k of Object.keys(rowMap)) {
+      if (Math.abs(parseFloat(k) - y) <= TOL) { key = k; break; }
+    }
+    if (key === null) { key = String(y); rowMap[key] = []; }
+    rowMap[key].push({ x, s });
+  });
+
+  // 2. Ordenar linhas de cima para baixo (Y decrescente em PDF)
+  const rows = Object.keys(rowMap)
+    .sort((a, b) => parseFloat(b) - parseFloat(a))
+    .map(k => {
+      const cells = rowMap[k].sort((a, b) => a.x - b.x);
+      const data   = cells.filter(c => c.x < xTipo).map(c => c.s).join(' ').trim();
+      const tipo   = cells.filter(c => c.x >= xTipo && c.x < xDesc).map(c => c.s).join(' ').trim();
+      const desc   = cells.filter(c => c.x >= xDesc && c.x < xValor).map(c => c.s).join(' ').trim();
+      const valor  = cells.filter(c => c.x >= xValor && c.x < xSaldo).map(c => c.s).join(' ').trim();
+      return { data, tipo, desc, valor };
+    })
+    .filter(r => r.data || r.tipo || r.desc || r.valor);
+
+  // 3. Montar transações: âncora = linha com DATA válida
+  let i = 0;
+  while (i < rows.length) {
+    const r = rows[i];
+    if (!dateRe.test(r.data) || !r.tipo || skipRe.test(r.desc)) { i++; continue; }
+
+    const [dd, mm, yy] = r.data.split('/');
+    const fullDate = `${dd}/${mm}/20${yy}`;
+    const isSaida  = /sa[íi]da/i.test(r.tipo);
+
+    // Acumula linhas de descrição seguintes (sem data e sem valor próprio)
+    const descParts = r.desc ? [r.desc] : [];
+    let valor = r.valor;
+    let j = i + 1;
+    while (j < rows.length && !dateRe.test(rows[j].data)) {
+      if (rows[j].desc) descParts.push(rows[j].desc);
+      if (!valor && rows[j].valor) valor = rows[j].valor;
+      j++;
+    }
+
+    // Limpar valor: remover "- R$", "R$", espaços
+    const valClean = (valor || '').replace(/[-–]\s*R\$\s*/,'').replace(/R\$\s*/,'').trim();
+    const val = valClean ? (isSaida ? -parseAmt(valClean) : parseAmt(valClean)) : NaN;
+
+    const desc = descParts.join(' ').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
+
+    if (!isNaN(val) && val !== 0) tx.push(mkTx(fullDate, desc, val));
+    else fail++;
+    i = j;
+  }
+  return { transactions: tx, failures: fail };
+}
+
+/* Stone fallback por texto (caso items não disponível) */
+function parseStoneText(lines) {
+  const tx = []; let fail = 0;
+  const sRe = /^(\d{2}\/\d{2}\/\d{2})\s+(Sa[íi]da|Entrada)/i;
+  for (let i = 0; i < lines.length; i++) {
+    const sm = lines[i].match(sRe);
+    if (!sm) continue;
+    const isSaida = /sa[íi]da/i.test(sm[2]);
+    const [dd,mm,yy] = sm[1].split('/');
+    const fullDate = `${dd}/${mm}/20${yy}`;
+    let collected = lines[i], j = i+1;
+    while (j < lines.length && !sRe.test(lines[j])) { collected += ' ' + lines[j]; j++; }
+    const negM = [...collected.matchAll(/[-–]\s*R\$\s*([\d.]+,\d{2})/g)];
+    const posM = [...collected.matchAll(/R\$\s*([\d.]+,\d{2})/g)];
+    let val = NaN;
+    if (isSaida && negM.length) val = -parseAmt(negM[0][1]);
+    else if (!isSaida && posM.length) val = parseAmt(posM[0][1]);
+    if (!isNaN(val) && val !== 0) tx.push(mkTx(fullDate, 'Transação', val));
+    else fail++;
+    i = j - 1;
+  }
+  return { transactions: tx, failures: fail };
+}
+
+/* Viacredi / Sistema Ailos — detecta layout automaticamente
+   Layout 1 (web): PDF com posições X, colunas CRÉDITO/DÉBITO separadas
+   Layout 2 (especial): texto puro, valor + sufixo C|D, datas DD/MM/YY
+*/
+function parseViaCredi(items, lines) {
+  // Detecta Layout 2: linhas com padrão "----" ou "HISTORICO LIBER DOCUMENTO"
+  const isL2 = lines.some(l => /^-{4,}/.test(l) || /HISTORICO\s+LIBER\s+DOCUMENTO/i.test(l) || /EXTRATO\s+ESPECIAL/i.test(l));
+  return isL2 ? parseViaCreditL2(lines) : parseViaCreditL1(items);
+}
+
+/* Viacredi Layout 1 — usa posições X; tolerância Y ±1 */
+function parseViaCreditL1(items) {
+  const tx = []; let fail = 0;
+  const skipDesc = /^SALDO\s+ANTERIOR$|^TOTAL$|^Os dados|^DATA$|^DESCRI/i;
+  const dateRe   = /^\d{2}\/\d{2}\/\d{4}$/;
+
+  // Detecta thresholds X a partir da linha de cabeçalho
+  // Header: DATA | DESCRIÇÃO | DOCUMENTO | CRÉDITO (R$) | DÉBITO (R$) | SALDO (R$)
+  let xDoc = 290, xCred = 360, xDeb = 450, xSaldo = 530;
+  const headerItems = items.filter(it => /^DOCUMENTO$/i.test((it.str||'').trim()));
+  if (headerItems.length) {
+    xDoc = headerItems[0].transform[4];
+    xCred = xDoc + 70;
+    xDeb  = xDoc + 160;
+    xSaldo= xDoc + 240;
+  }
+
+  // Agrupa por Y com tolerância ±1
+  const rows = [];
+  for (const item of items) {
+    if (!item.str || !item.str.trim()) continue;
+    const x = item.transform[4];
+    const y = item.transform[5];
+    let placed = false;
+    for (const row of rows) {
+      if (Math.abs(row.y - y) <= 1) { row.items.push({x, text:item.str.trim()}); placed=true; break; }
+    }
+    if (!placed) rows.push({ y, items:[{x, text:item.str.trim()}] });
+  }
+  rows.sort((a,b) => b.y - a.y);
+
+  for (const row of rows) {
+    row.items.sort((a,b) => a.x - b.x);
+    const first = row.items[0];
+    if (!first || !dateRe.test(first.text)) continue;
+    const date = first.text;
+
+    // Descrição: items entre DATA e DOCUMENTO (X entre ~50 e xDoc-5)
+    const desc = row.items
+      .filter(i => i.x >= 50 && i.x < xDoc - 5)
+      .map(i => i.text).join(' ').trim();
+    if (!desc || skipDesc.test(desc)) continue;
+
+    // Crédito: X entre xCred e xDeb | Débito: X entre xDeb e xSaldo
+    const creditItem = row.items.find(i => i.x >= xCred - 5 && i.x < xDeb - 5);
+    const debitItem  = row.items.find(i => i.x >= xDeb  - 5 && i.x < xSaldo - 5);
+
+    let val = NaN;
+    if (creditItem) val = parseAmt(creditItem.text);
+    else if (debitItem) val = parseAmt(debitItem.text);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    tx.push(mkTx(date, desc.slice(0,80) || 'Transação', val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Viacredi Layout 2 (Extrato Especial)
+   DD/MM/YY HISTORICO [LIBER] DOCUMENTO VALOR C|D [SALDO-]
+   Ano extraído de "PERÍODO: DD/MM/YYYY" ou "EXTRATO ESPECIAL REF.DD/MM/YYYY"
+*/
+function parseViaCreditL2(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^SALDO\s+ANTERIOR|^SALDO\s+TOTAL|^LIMITE|^JUROS\s+EFETIVO|^DATA\s+HISTORICO|^-{4}|^\*{4}|^VALOR\s+BLOQ|^DESTINO:|^PA:|^CONTA\/DV:|^AVISO:/i;
+
+  // Extrai ano
+  let year = String(new Date().getFullYear());
+  for (const l of lines) {
+    const m = l.match(/(?:PERÍODO[:\s]+|EXTRATO\s+ESPECIAL\s+REF\.)(\d{2})\/(\d{2})\/(\d{4})/i);
+    if (m) { year = m[3]; break; }
+  }
+
+  // DD/MM/YY + texto + VALOR + C|D + (saldo opcional terminando em -)
+  const rowRe = /^(\d{2}\/\d{2}\/\d{2})\s+(.+?)\s+([\d.]+,\d{2})\s+(C|D)(?:\s+[\d.]+,\d{2}-?)?\s*$/;
+
+  for (const line of lines) {
+    if (skip.test(line.trim())) continue;
+    const m = line.match(rowRe);
+    if (!m) continue;
+    const [dd, mm] = m[1].split('/');
+    const date = `${dd}/${mm}/${year}`;
+    // Descrição: tudo antes do valor — remover número de documento (sequência numérica no final)
+    const rawDesc = m[2].trim();
+    // Remove número de documento: último token numérico antes do valor
+    const desc = rawDesc.replace(/\s+[\d.]+\s*$/, '').trim().slice(0, 80) || 'Transação';
+    const val = parseAmt(m[3]) * (m[4] === 'D' ? -1 : 1);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    tx.push(mkTx(date, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Santander — Extrato Consolidado Inteligente (PJ)
+   Layout 4: Múltiplas transações por data; valor SEMPRE em linha isolada
+             Sinal: sufixo "-" = débito, sem sufixo = crédito
+             Colunas Créditos/Débitos separadas no PDF mas fundidas pelo groupLines
+*/
+function parseSantanderCI(lines) {
+  const tx = []; let fail = 0;
+
+  // ── Ano do extrato ────────────────────────────────────────────────────────
+  let year = String(new Date().getFullYear());
+  for (const l of lines) {
+    const m = l.match(/(?:janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)[\/\s]+(\d{4})/i);
+    if (m) { year = m[1]; break; }
+  }
+
+  // ── Regex ─────────────────────────────────────────────────────────────────
+  const skipCI = /^SALDO EM|^PERIODO:|^Pagina:|^BALP_|^Extrato_PJ|^Data\s+Descri|^Créditos\s+Débitos|^Movimenta[cç]|^Conta Corrente$|^A\s+-\s*Bloqueio|^Saldos por Per|^Compras com Cart|^Comprovantes de Pag|^Transferências entre|^Créditos Contratados|^CHEQUE EMPRESA|^CET\s|^Pacote de Serv|^PONTU|^Índices Econ|^Fale Conosco|^Loja:|^Central de|^Ouvidoria|^SAC$|^0800|^4004|^55\s+11|^Resumo\s+-|^Nome$|^Agência|^\*Valores|^Não estão|^\*Identif|^Produto\s+Contratado|^Se algum|^O saldo devedor|^Cheque Empresa ou|^Caso o saldo|^Desde de|^Para efeito|^Quer avan|^Conheça\s+o\s+Avan|^Você pode contar|^Tudo isso|^São mais|^Cadastre|^Produto sujeito|^Com o Pacote|^Importante:|^Para economizar|^Valores Praticados|^Pontos\s+Valor|^Acima de|^¹|^Referência|^IBOVESPA|^IGPM|^INCC|^INPC|^IPCA|^CDI\s|^TR\s|^POUPANCA|^EURO\s|^DOLAR|^Valores\s+Refer|^Você e Seu|^Com o Capital|^Facilidade na|^Mais prazo|^Libera[cç]|^Você pode contratar|^Para mais inform|^Cuidado com o Golpe|^Pessoas mal|^-\s+Quando efetuar|^-\s+Se notar|^-\s+Se precisar|^Sua segurança|^EXTRATO CONSOLIDADO|^janeiro|^fevereiro|^mar[çc]o|^abril|^maio|^junho|^julho|^agosto|^setembro|^outubro|^novembro|^dezembro|^Prezado|^Soluções em pag|^O Santander|^nossos serviços|^-\s+Getnet:|^transações pelo|^-\s+Cobranças:|^Internet Banking Empres|^-\s+Pix:|^-\s+Pagamento a forn|^realizar pagamentos|^-\s+Tributos:|^de guias|^-\s+FOPA:|^funcionários|^PACOTE|^Produtos e Serviços|^CONTA CORRENTE\s+EXTRATO|^TED\s+-\s+PIX|^TRANSAÇÕES ADICIONAIS|^MANUTENCAO DE CONTA|^TRANSF ENTRE|^CONTRATACAO|^SAQUE NO CAIXA|^OPERACOES ATIVAS|^COBRANCA\s+LIQUID|^FOLHA DE PAG|^CANAIS ELETRONICOS|^CHEQUE\s+CH\s|^CHEQUES\s+CUST|^Valor da Mensalidade|^Status do Débito|^Dia de Débito|^Programa de Relacion|^COMPOSIÇÃO DA PONT|^PRODUTOS\s+PONTOS|^RECEBIMENTOS E FOLHA|^Com o Pacote de Serv|^CERTBLU SERVICO/i;
+
+  const auxSectionRe = /^Compras com Cartão de Débito|^Data\s+Número do Cartão|^Comprovantes de Pagamento|^Contas de Consumo|^Transferências entre Contas|^Data\s+Canal\s+Tipo|^Créditos Contratados|^Saldos por Período/i;
+
+  const reDateCI   = /^(\d{2}\/\d{2}(?:\/\d{4})?)\s*/;
+  const reValIso   = /^(\d{1,3}(?:\.\d{3})*,\d{2})(-?)\s*$/;
+  const reValSaldo = /(\d{1,3}(?:\.\d{3})*,\d{2})(-?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})-?\s*$/;
+  const reDocCI    = /^\d{4}\/\d{9}$|^\d{6}$|^\d{2}\/\d{2}\s+\d{2}:\d{2}/;
+  const reAuxLine  = /^\d{2}\/\d{2}\s+INTERNET BANKING|^\d{2}\/\d{2}\s+\d{4}\.\d{4}/;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const fullDate = (d) => /^\d{2}\/\d{2}$/.test(d) ? d + '/' + year : d;
+
+  const cleanText = (t) => t
+    .replace(/\s+\d{4}\/\d{9}/g, '')
+    .replace(/\s+\d{6}(?=\s|$)/g, '')
+    .replace(/\s+\d{2}\/\d{2}\s+\d{2}:\d{2}/g, '')
+    .replace(/\s+-\s*$/, '')
+    .replace(/\s+/g, ' ').trim();
+
+  const extractVal = (t) => {
+    const mVS = t.match(reValSaldo);
+    if (mVS) return {
+      val:   parseAmt(mVS[1]),
+      isNeg: mVS[2] === '-',
+      desc:  t.slice(0, mVS.index).replace(/\s+/g,' ').trim()
+    };
+    const mV = t.match(/(\d{1,3}(?:\.\d{3})*,\d{2})(-?)\s*$/);
+    if (!mV) return null;
+    return {
+      val:   parseAmt(mV[1]),
+      isNeg: mV[2] === '-',
+      desc:  t.slice(0, mV.index).replace(/\s+/g,' ').trim()
+    };
+  };
+
+  const safeDesc = (d) => {
+    const s = (d || '').replace(/\s+/g,' ').trim();
+    return /^[-\s]*$/.test(s) ? '' : s;
+  };
+
+  // Compara datas DD/MM: retorna <0, 0, >0
+  const cmpDate = (a, b) => {
+    const pa = (a||'').split('/'), pb = (b||'').split('/');
+    const ma = parseInt(pa[1]||0)*100 + parseInt(pa[0]||0);
+    const mb = parseInt(pb[1]||0)*100 + parseInt(pb[0]||0);
+    return ma - mb;
+  };
+
+  // ── Pré-filtra: remove ruído e seções auxiliares ──────────────────────────
+  const filtered = [];
+  let inAux = false;
+  for (const rawLine of lines) {
+    const l = rawLine.trim();
+    if (!l) continue;
+    if (auxSectionRe.test(l)) { inAux = true; continue; }
+    if (reAuxLine.test(l))    { inAux = true; continue; }
+    if (skipCI.test(l)) continue;
+    if (reDocCI.test(l)) continue;
+    const dm = l.match(reDateCI);
+    if (dm) {
+      const rc = l.replace(reDateCI,'').trim();
+      if (/^INTERNET BANKING|^\d{4}\.\d{4}/.test(rc)) { inAux = true; continue; }
+      inAux = false;
+    }
+    if (inAux) continue;
+    filtered.push(l);
+  }
+
+  // ── Estado ────────────────────────────────────────────────────────────────
+  let curDate   = null;
+  let curDesc   = '';
+  let pendVal   = NaN;
+  let pendIsNeg = false;
+
+  // Commita o pendente e limpa estado de valor (mantém curDate)
+  const commitPending = () => {
+    if (!curDate || isNaN(pendVal) || pendVal === 0) { pendVal = NaN; return; }
+    const d = safeDesc(curDesc).slice(0,80) || 'Transação';
+    tx.push(mkTx(normDate(fullDate(curDate)), d, pendVal * (pendIsNeg ? -1 : 1)));
+    curDesc   = '';
+    pendVal   = NaN;
+    pendIsNeg = false;
+  };
+
+  // ── Loop principal com lookahead e commit diferido ────────────────────────
+  for (let i = 0; i < filtered.length; i++) {
+    const line     = filtered[i];
+    const nextLine = filtered[i + 1] || '';
+
+    // ── Linha de data ───────────────────────────────────────────────────────
+    const dm = line.match(reDateCI);
+    if (dm) {
+      const lineDate  = dm[1];
+      const restCheck = line.replace(reDateCI, '').trim();
+
+      // Heurística: data ≤ curDate enquanto há valor pendente
+      // → é referência de data em complemento (ex: "17/01 POSTO MARCIO")
+      if (!isNaN(pendVal) && pendVal !== 0 && curDate && cmpDate(lineDate, curDate) <= 0) {
+        const extra = cleanText(restCheck);
+        if (extra) curDesc = [curDesc, extra].filter(Boolean).join(' ');
+        continue;
+      }
+
+      // Nova data real → commita pendente, reinicia estado
+      commitPending();
+      curDate   = lineDate;
+      curDesc   = '';
+      pendVal   = NaN;
+      pendIsNeg = false;
+
+      const rest = cleanText(restCheck);
+      if (!rest) continue;
+
+      const ev = extractVal(rest);
+      if (!ev || isNaN(ev.val) || ev.val === 0) {
+        curDesc = rest; continue;
+      }
+
+      if (reValSaldo.test(rest)) {
+        // Dois números: val + saldo → pending diferido
+        curDesc   = safeDesc(ev.desc) || '';
+        pendVal   = ev.val;
+        pendIsNeg = ev.isNeg;
+      } else if (reValIso.test(nextLine)) {
+        // Um número + próxima é valor isolado → este número é SALDO, descarta
+        curDesc = safeDesc(ev.desc || rest.replace(/\d{1,3}(?:\.\d{3})*,\d{2}-?\s*$/, ''));
+      } else {
+        // Um número, próxima não é valor isolado → é o valor
+        curDesc   = safeDesc(ev.desc) || '';
+        pendVal   = ev.val;
+        pendIsNeg = ev.isNeg;
+      }
+      continue;
+    }
+
+    if (!curDate) continue;
+
+    // ── Valor isolado ────────────────────────────────────────────────────────
+    const mIso = line.match(reValIso);
+    if (mIso) {
+      const val   = parseAmt(mIso[1]);
+      const isNeg = mIso[2] === '-';
+      if (!isNaN(val) && val !== 0) {
+        // Se já há pendente → commita primeiro
+        if (!isNaN(pendVal) && pendVal !== 0) commitPending();
+        // Novo pendente (curDesc acumula complementos antes do próximo commit)
+        pendVal   = val;
+        pendIsNeg = isNeg;
+      }
+      continue;
+    }
+
+    // ── Linha sem data com valor embutido ────────────────────────────────────
+    const cleaned = cleanText(line);
+    const ev2 = extractVal(cleaned);
+    if (ev2 && !isNaN(ev2.val) && ev2.val !== 0) {
+      if (reValSaldo.test(cleaned)) {
+        // Dois números: val + saldo → commita pendente, novo pendente diferido
+        commitPending();
+        curDesc   = [curDesc, safeDesc(ev2.desc)].filter(Boolean).join(' ');
+        pendVal   = ev2.val;
+        pendIsNeg = ev2.isNeg;
+      } else if (reValIso.test(nextLine)) {
+        // Um número + próxima é valor isolado → este número é SALDO
+        commitPending();
+        curDesc = [curDesc, safeDesc(ev2.desc)].filter(Boolean).join(' ');
+        // pendVal fica NaN (sem valor ainda)
+      } else {
+        // Um número, próxima não é valor isolado → é o valor
+        commitPending();
+        curDesc   = [curDesc, safeDesc(ev2.desc)].filter(Boolean).join(' ');
+        pendVal   = ev2.val;
+        pendIsNeg = ev2.isNeg;
+      }
+      continue;
+    }
+
+    // ── Complemento de descrição ──────────────────────────────────────────────
+    // Se próxima linha é valor isolado → esta linha inicia uma nova transação
+    const addDesc = cleanText(line);
+    if (!addDesc) continue;
+
+    if (reValIso.test(nextLine)) {
+      // Nova transação: commita pendente, começa nova desc
+      commitPending();
+      curDesc = addDesc;
+    } else {
+      // Complemento da transação corrente
+      curDesc = [curDesc, addDesc].filter(Boolean).join(' ');
+    }
+  }
+
+  // Commita o último pendente
+  commitPending();
+
+  return { transactions: tx, failures: fail };
+}
+
+/* Santander — detecta layout automaticamente:
+   Layout 1: DD/MM/YYYY HISTÓRICO [-] R$ VALOR   (Internet Banking com R$)
+   Layout 2: DD/MM/YYYY HISTÓRICO DOC(6dígitos) VALOR  (sem prefixo R$)
+   Layout 3: Santander Empresas — data sempre tem VALOR SALDO no final, sem R$
+             hist pode vir ANTES e/ou DEPOIS da linha de data
+   Layout 4: Extrato Consolidado Inteligente PJ — valor em linha isolada
+*/
+function parseSantander(lines) {
+  // ── Layout 4: Extrato Consolidado Inteligente ──────────────────────────
+  const hasCI = lines.some(l => /EXTRATO CONSOLIDADO INTELIGENTE/i.test(l));
+  if (hasCI) return parseSantanderCI(lines);
+
+  const tx = []; let fail = 0;
+  const skip = /Saldo do dia|Cc\s*\+\s*ContaMax|SALDO ANTERIOR|Central de Atendimento|4004\s+\d|0800\s+\d|Ouvidoria|Saldo disp|Internet Banking Empresarial|Saldo de ContaMax|Posição em:|Desbloqueio|Juros acumulados|IOF Acumulado|Provisão|Limite Cheque/i;
+  const amtRe1    = /([–—\-]\s*R\$|R\$)\s*([\d.]+,\d{2})/;
+  const layout2Re = /^(.*?)\s+(\d{6})\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})(?:\s+\d{1,3}(?:\.\d{3})*,\d{2})?\s*$/;
+  const valSaldoRe = /(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+
+  // Layout 3: qualquer linha de data que termina com [-]VALOR SALDO sem R$
+  const hasL3 = lines.some(l => {
+    const t = l.trim();
+    return /^\d{2}\/\d{2}\/\d{4}/.test(t) && !amtRe1.test(t) && valSaldoRe.test(t);
+  });
+
+  let pend = null;
+  const commitL1 = (date, desc, amtStr, isNeg) => {
+    const val = parseAmt(amtStr) * (isNeg ? -1 : 1);
+    if (isNaN(val)||val===0) { fail++; return; }
+    tx.push(mkTx(normDate(date), desc.replace(/\s+/g,' ').trim().slice(0,80)||'Transação', val));
+  };
+
+  if (hasL3) {
+    // ── Layout 3: Santander Empresas ──────────────────────────────────────
+    // Formato: [preHist] + DATA [-]VALOR SALDO [+ postHist]
+    // Remove números de documento (5+ dígitos isolados)
+    const removeDocs = s => s.replace(/\b\d{5,}\b/g,'').replace(/\s+/g,' ').trim();
+    const isL3Date   = l => /^\d{2}\/\d{2}\/\d{4}/.test(l) && !amtRe1.test(l) && valSaldoRe.test(l);
+
+    const cls = lines.map(l => l.trim()).filter(l => l && !skip.test(l));
+
+    // Índices das linhas de data L3
+    const dateIdxs = cls.reduce((a,l,i) => { if(isL3Date(l)) a.push(i); return a; }, []);
+
+    // Pré-computa (data, valor, histInline) para cada índice
+    const tups = dateIdxs.map(i => {
+      const dm   = cls[i].match(/^(\d{2}\/\d{2}\/\d{4})\s*(.*)/);
+      const rest = dm[2];
+      const vm   = rest.match(valSaldoRe);
+      const val  = parseAmt(vm[1]);
+      const inlineHist = removeDocs(rest.replace(valSaldoRe,''));
+      return { i, date:dm[1], val, inlineHist };
+    });
+
+    for (let pi = 0; pi < tups.length; pi++) {
+      const { i, date, val, inlineHist } = tups[pi];
+      if (isNaN(val)||val===0) { fail++; continue; }
+
+      const nextI          = pi+1 < tups.length ? tups[pi+1].i : cls.length;
+      const nextInlineHist = pi+1 < tups.length ? tups[pi+1].inlineHist : null;
+
+      // preHist: linha antes da data, apenas se a data não tem hist inline
+      const prevLine = i > 0 ? cls[i-1] : '';
+      const preHist  = (!inlineHist && prevLine && !/^\d{2}\/\d{2}\/\d{4}/.test(prevLine))
+                       ? [removeDocs(prevLine)] : [];
+
+      // postHist: se próxima tx precisa de preHist (inlineHist vazio), exclui última linha
+      const postEnd  = (nextInlineHist !== null && !nextInlineHist) ? nextI-1 : nextI;
+      const postHist = cls.slice(i+1, postEnd)
+                         .filter(l => !/^\d{2}\/\d{2}\/\d{4}/.test(l))
+                         .map(removeDocs)
+                         .filter(Boolean);
+
+      const descParts = [...preHist, inlineHist, ...postHist].filter(Boolean);
+      const desc = descParts.join(' ').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
+      tx.push(mkTx(normDate(date), desc, val));
+    }
+
+  } else {
+    // ── Layouts 1 e 2 (formato original) ────────────────────────────────
+    for (const line of lines) {
+      if (skip.test(line)) { pend=null; continue; }
+      const dm = line.match(dateFullRe);
+      if (dm) {
+        if (pend) { fail++; pend=null; }
+        const afterDate = line.replace(dateFullRe,'').trim();
+        const am1 = afterDate.match(amtRe1);
+        if (am1) {
+          const isNeg = /[–—\-]/.test(am1[1]);
+          const desc = afterDate.replace(/([–—\-]\s*)?R\$\s*[\d.]+,\d{2}/g,'').trim();
+          commitL1(dm[1], desc, am1[2], isNeg);
+          continue;
+        }
+        const m2 = afterDate.match(layout2Re);
+        if (m2) {
+          const val = parseAmt(m2[3]);
+          if (!isNaN(val)&&val!==0) tx.push(mkTx(normDate(dm[1]), m2[1].trim().slice(0,80)||'Transação', val));
+          else fail++;
+          continue;
+        }
+        pend = { date:dm[1], desc:afterDate };
+      } else if (pend) {
+        if (skip.test(line)) { fail++; pend=null; continue; }
+        const am = line.match(amtRe1);
+        if (am) {
+          const isNeg = /[–—\-]/.test(am[1]);
+          commitL1(pend.date, pend.desc, am[2], isNeg);
+          pend=null;
+        } else if (line.trim()) {
+          pend.desc += ' '+line.trim();
+        }
+      }
+    }
+  }
+  return { transactions:tx, failures:fail };
+}
+  const tx = []; let fail = 0;
+  const skip = /Saldo do dia|Cc\s*\+\s*ContaMax|SALDO ANTERIOR|Central de Atendimento|4004\s+\d|0800\s+\d|Ouvidoria|Saldo disponível|Internet Banking Empresarial|Saldo de ContaMax|Posição em:|Desbloqueio|Juros acumulados|IOF Acumulado|Provisão|Limite Cheque/i;
+  const amtRe1    = /([–—\-]\s*R\$|R\$)\s*([\d.]+,\d{2})/;
+  const layout2Re = /^(.*?)\s+(\d{6})\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})(?:\s+\d{1,3}(?:\.\d{3})*,\d{2})?\s*$/;
+
+/* Nubank */
+function parseNubank(lines) {
+  const tx = []; let fail = 0;
+  const MONTHS={JAN:'01',FEV:'02',MAR:'03',ABR:'04',MAI:'05',JUN:'06',JUL:'07',AGO:'08',SET:'09',OUT:'10',NOV:'11',DEZ:'12'};
+  const nuDate  = /^(\d{2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+(\d{4})/i;
+  const entRe   = /^Total de entradas/i;
+  const saiRe   = /^Total de saídas/i;
+  const saldoRe = /^Saldo do dia/i;
+  const skipRe  = /^Tem alguma|^Caso a|^Extrato gerado|^Os dados|^Não nos|^Asseguramos|^Nu Financ|^Nu Pagam|^\d+\s+de\s+\d+$/i;
+  const amtEnd  = /\d{1,3}(?:\.\d{3})*,\d{2}\s*$/;
+  const txStart = /^(Transferência|Pagamento|Aplicação|Resgate|Débito|Compra|Estorno|Pix)/i;
+
+  let curDate=null, curSign=0, pend=[];
+
+  const flush=()=>{
+    if(!pend.length||curSign===0||!curDate){pend=[];return;}
+    const full=pend.join(' ');
+    const amts=[...full.matchAll(/\d{1,3}(?:\.\d{3})*,\d{2}/g)];
+    if(!amts.length){fail++;pend=[];return;}
+    const val=parseAmt(amts[amts.length-1][0])*curSign;
+    if(isNaN(val)||val===0){fail++;pend=[];return;}
+    const desc=full
+      .replace(/\d{1,3}(?:\.\d{3})*,\d{2}/g,'')
+      .replace(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g,'')
+      .replace(/\(\d{4}\)\s*Agência:.*$/i,'')
+      .replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+    tx.push(mkTx(curDate, desc, val));
+    pend=[];
+  };
+
+  for (const line of lines) {
+    const dm=line.match(nuDate);
+    if(dm){flush();curDate=`${dm[1].padStart(2,'0')}/${MONTHS[dm[2].toUpperCase()]}/${dm[3]}`;curSign=0;pend=[];continue;}
+    if(entRe.test(line)){flush();curSign=1;pend=[];continue;}
+    if(saiRe.test(line)){flush();curSign=-1;pend=[];continue;}
+    if(saldoRe.test(line)){flush();curSign=0;pend=[];continue;}
+    if(skipRe.test(line)||!curDate||curSign===0) continue;
+    const t=line.trim(); if(!t) continue;
+    if(txStart.test(t)&&pend.length&&amtEnd.test(pend[pend.length-1])) flush();
+    pend.push(t);
+    if(amtEnd.test(t)) flush();
+  }
+  flush();
+  return { transactions:tx, failures:fail };
+}
+
+/* PagBank / PagSeguro
+   Linha: DD/MM/YYYY DESCRIÇÃO R$ VALOR  (crédito)
+          DD/MM/YYYY DESCRIÇÃO -R$ VALOR (débito)
+   Ignora linhas com "Saldo do dia"
+*/
+function parsePagBank(lines) {
+  const tx = []; let fail = 0;
+  const skip = /Saldo do dia/i;
+  let pend = null;
+
+  const commit = (date, text) => {
+    const rsIdx = text.search(/-\s*R\$|R\$/);
+    if (rsIdx < 0) { fail++; return; }
+    const amRe = /(-\s*R\$|R\$)\s*([\d.]+,\d{2})/;
+    const am = text.slice(rsIdx).match(amRe);
+    if (!am) { fail++; return; }
+    const isNeg = am[1].includes('-');
+    const val = parseAmt(am[2]) * (isNeg ? -1 : 1);
+    if (isNaN(val)||val===0) { fail++; return; }
+    const desc = text.slice(0, rsIdx).replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+    tx.push(mkTx(normDate(date), desc, val));
+  };
+
+  for (const line of lines) {
+    if (!dateFullRe.test(line)) continue;
+    if (skip.test(line)) { pend=null; continue; }
+    const dm = line.match(dateFullRe);
+    const rest = line.replace(dateFullRe,'').trim();
+    if (pend) { fail++; pend=null; }
+    if (/R\$/.test(rest)) {
+      commit(dm[1], rest);
+    } else {
+      pend = { date:dm[1], text:rest };
+    }
+  }
+  // try any remaining pending
+  if (pend) commit(pend.date, pend.text);
+  return { transactions:tx, failures:fail };
+}
+
+/* Sicredi
+   Linha: DD/MM/YYYY HISTÓRICO [CPF/CNPJ] [NOME] [DOC_TYPE] VALOR SALDO
+   Segundo-ao-último amount = valor, último = saldo.
+   Descrição = texto antes do primeiro valor monetário.
+*/
+function parseSicredi(lines) {
+  const tx = []; let fail = 0;
+  const skip = /SALDO ANTERIOR|Lançamentos Futuros|Sicredi Fone|^SAC|^Ouvidoria|^Valores das/i;
+
+  for (const line of lines) {
+    if (!dateFullRe.test(line)||skip.test(line)) continue;
+    const dm = line.match(dateFullRe);
+    const amts = [...line.matchAll(moneyRe())].map(m=>m[0]);
+    if (!amts.length) { fail++; continue; }
+    const valStr = amts.length>=2 ? amts[amts.length-2] : amts[amts.length-1];
+    const val = parseAmt(valStr);
+    if (isNaN(val)||val===0) { fail++; continue; }
+
+    // Descrição: tudo antes do primeiro valor monetário
+    const afterDate = line.replace(dateFullRe,'');
+    const firstAmtIdx = afterDate.search(/-?\d{1,3}(?:\.\d{3})*,\d{2}/);
+    let desc = (firstAmtIdx >= 0 ? afterDate.slice(0, firstAmtIdx) : afterDate);
+    desc = desc
+      .replace(/\b\d{11,14}\b/g,'')        // CPF/CNPJ sem máscara
+      .replace(/\bPIX_CRED\b|\bPIX_DEB\b/gi,'')
+      .replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+    tx.push(mkTx(normDate(dm[1]), desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Unicred
+   Linha: DD/MM/YYYY DESCRIÇÃO ( Doc.: DOCINFO ) [-] R$ VALOR R$ SALDO
+   Pode ser multilinha: abre em ( Doc.: e fecha em ) antes do R$
+*/
+function parseUnicred(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^Saldo em \d|^Saldo no final|^Lançamentos futuros|^Saldo atual|^Total disponível|^Saldo bloqueado|^Limite de|^IOF|^Juros|^Tarifas|^CENTRAL DE|^Período de|^Solicitado|^Data\s+Lançamentos|CENTRAL DE RELACIONAMENTO|^\d+\/\d+\s*$/i;
+  let pend = null;
+
+  const commit = (date, text) => {
+    const docIdx = text.indexOf('( Doc.:');
+    const beforeDoc = docIdx >= 0 ? text.slice(0, docIdx) : text;
+    const afterDoc  = docIdx >= 0 ? text.slice(docIdx) : text;
+    const desc = beforeDoc.replace(/\s+/g,' ').trim();
+    const amRe = /(-\s*R\$|R\$)\s*([\d.]+,\d{2})/g;
+    const amts = [...afterDoc.matchAll(amRe)];
+    if (!amts.length) { fail++; return; }
+    const isNeg = amts[0][1].includes('-');
+    const val = parseAmt(amts[0][2]) * (isNeg ? -1 : 1);
+    if (isNaN(val)||val===0) { fail++; return; }
+    tx.push(mkTx(normDate(date), desc.slice(0,80)||'Transação', val));
+  };
+
+  const isComplete = t => /\)\s*-?\s*R\$/.test(t) || (t.includes('R$') && !t.includes('( Doc.:'));
+
+  for (const line of lines) {
+    if (skip.test(line.trim())) { if (pend) { fail++; pend=null; } continue; }
+    const dm = line.match(dateFullRe);
+    if (dm) {
+      if (pend) { fail++; pend=null; }
+      const rest = line.replace(dateFullRe,'').trim();
+      if (isComplete(rest)) {
+        commit(dm[1], rest);
+      } else {
+        pend = { date:dm[1], text:rest };
+      }
+    } else if (pend) {
+      pend.text += ' '+line.trim();
+      if (isComplete(pend.text)) {
+        commit(pend.date, pend.text);
+        pend=null;
+      }
+    }
+  }
+  if (pend) commit(pend.date, pend.text);
+  return { transactions:tx, failures:fail };
+}
+
+/* Asaas
+   Linha: DD/MM/YYYY DESCRIÇÃO R$ VALOR  (positivo = crédito, negativo = débito)
+*/
+function parseAsaas(lines) {
+  const tx = []; let fail = 0;
+  const skip = /Saldo inicial|Saldo final|^Data\s+Movimentações|Extrato gerado|^Período\s+\d/i;
+  let pend = null;
+
+  const commit = (date, text) => {
+    const rsIdx = text.search(/R\$/);
+    if (rsIdx < 0) { fail++; return; }
+    const amRe = /R\$\s*(-?\s*[\d.]+,\d{2})/;
+    const am = text.slice(rsIdx).match(amRe);
+    if (!am) { fail++; return; }
+    const val = parseAmt(am[1]);
+    if (isNaN(val)||val===0) { fail++; return; }
+    const desc = text.slice(0, rsIdx).replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+    tx.push(mkTx(normDate(date), desc, val));
+  };
+
+  for (const line of lines) {
+    if (skip.test(line.trim())) { pend=null; continue; }
+    const dm = line.match(dateFullRe);
+    if (dm) {
+      if (pend) { fail++; pend=null; }
+      const rest = line.replace(dateFullRe,'').trim();
+      if (rest.includes('R$')) {
+        commit(dm[1], rest);
+      } else {
+        pend = { date:dm[1], text:rest };
+      }
+    } else if (pend) {
+      pend.text += ' '+line.trim();
+      if (pend.text.includes('R$')) {
+        commit(pend.date, pend.text);
+        pend=null;
+      }
+    }
+  }
+  if (pend) commit(pend.date, pend.text);
+  return { transactions:tx, failures:fail };
+}
+
+/* Sicoob — detecta layout automaticamente:
+   Layout A (extrato padrão): DD/MM HISTÓRICO VALOR(C|D) colado na linha
+   Layout B (Internet Banking): data na linha 1, R$ VALOR C|D em linha separada
+*/
+function parseSicoob(lines) {
+  const isB = lines.some(l => /^R\$\s*[\d.]+,\d{2}\s*[CD]\s*$/.test(l.trim()));
+  return isB ? parseSicoobB(lines) : parseSicoobA(lines);
+}
+
+/* Sicoob Layout A — extrato padrão */
+function parseSicoobA(lines) {
+  const tx = []; let fail = 0;
+  const skip = /SALDO\s+ANTERIOR|SALDO\s+DO\s+DIA|SALDO\s+BLOQ|RESUMO|ENCARGOS|JUROS\s+VENCIDOS|TARIFAS\s+VENCIDAS|SALDO\s+BLOQUEADO|SALDO\s+DISPONÍVEL|CHEQUE\s+ESPECIAL|EXTRATOS\s+EMITIDOS|CUSTO\s+EFETIVO|^SAC:|OUVIDORIA\s+SICOOB/i;
+
+  let year = String(new Date().getFullYear());
+  for (const l of lines) {
+    const pm = l.match(/PERÍODO[:\s]+\d{2}\/\d{2}\/(\d{4})/i);
+    if (pm) { year = pm[1]; break; }
+  }
+
+  const dateRe   = /^(\d{2}\/\d{2})\s+/;
+  const valRe    = /(\d{1,3}(?:\.\d{3})*,\d{2})(C|D)\s*$/;
+  const docLineRe = /^DOC\.:/i;
+  const maskedCPF = /^\*{3}\.\d{3}\.\d{3}-\*{2}/;
+
+  let pend = null;
+
+  const commit = () => {
+    if (!pend) return;
+    const descParts = [pend.hist];
+    for (const el of pend.extraLines) {
+      if (docLineRe.test(el) || maskedCPF.test(el)) continue;
+      if (el.trim()) descParts.push(el.trim());
+    }
+    const desc = descParts.join(' ').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
+    const [dd, mm] = pend.dm;
+    tx.push(mkTx(`${dd.padStart(2,'0')}/${mm.padStart(2,'0')}/${year}`, desc, pend.val));
+    pend = null;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (skip.test(trimmed)) { commit(); continue; }
+    const dm = trimmed.match(dateRe);
+    if (dm) {
+      commit();
+      const vm = trimmed.match(valRe);
+      if (!vm) { fail++; continue; }
+      const val = parseAmt(vm[1]) * (vm[2]==='D' ? -1 : 1);
+      if (isNaN(val)||val===0) { fail++; continue; }
+      const [dd, mm] = dm[1].split('/');
+      const hist = trimmed.replace(dateRe,'').replace(valRe,'').replace(/\s+/g,' ').trim();
+      pend = { dm:[dd,mm], hist, val, extraLines:[] };
+    } else if (pend) {
+      pend.extraLines.push(trimmed);
+    }
+  }
+  commit();
+  return { transactions:tx, failures:fail };
+}
+
+/* Sicoob Layout B — Internet Banking
+   Estrutura por transação (ordem de extração pode variar):
+     DD/MM [DOCUMENTO] HISTÓRICO
+     COMPLEMENTO DA DESCRIÇÃO (opcional)
+     R$ VALOR C|D
+   Abordagem de bloco: agrupa todas as linhas por data, busca valor dentro do bloco.
+   Skip verificado no conteúdo APÓS remover a data.
+*/
+function parseSicoobB(lines) {
+  const tx = []; let fail = 0;
+
+  const skipContent = /^SALDO\s+DO\s+DIA|^SALDO\s+ANTERIOR|^SALDO\s+BLOQUEADO|^RESUMO|^ENCARGOS|^JUROS|^TARIFAS|^SALDO\s+DISPONÍVEL|^SALDO\s+EM\s+CONTA|^CHEQUE\s+ESPECIAL|^CUSTO\s+EFETIVO|^INFORMAÇÕES|^SAC:|^OUVIDORIA|^Saldo|^Cheque|^Previsão|^Vencimento|^Taxa|^Data\s+Documento|^HISTÓRICO\s+DE|^Cooperativa:|^Conta:/i;
+
+  let year = String(new Date().getFullYear());
+  for (const l of lines) {
+    const m = l.match(/[Pp]er[ií]odo[:\s]+\d{2}\/\d{2}\/(\d{4})/i);
+    if (m) { year = m[1]; break; }
+  }
+
+  const dateRe    = /^(\d{2}\/\d{2})\s+/;
+  const valLineRe = /^R\$\s*([\d.]+,\d{2})\s*(C|D)\s*$/;
+
+  const blocks = [];
+  let cur = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const dm = trimmed.match(dateRe);
+    if (dm) {
+      const afterDate = trimmed.replace(dateRe, '').trim();
+      if (skipContent.test(afterDate)) { cur = null; continue; }
+      cur = { date: dm[1], allLines: [afterDate] };
+      blocks.push(cur);
+    } else if (cur) {
+      cur.allLines.push(trimmed);
+    }
+  }
+
+  for (const block of blocks) {
+    const valLine = block.allLines.find(l => valLineRe.test(l));
+    if (!valLine) { fail++; continue; }
+    const vm  = valLine.match(valLineRe);
+    const val = parseAmt(vm[1]) * (vm[2]==='D' ? -1 : 1);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    const descLines = block.allLines
+      .filter(l => !valLineRe.test(l))
+      .map((l, i) => i === 0
+        ? l.replace(/^\d{4,}\s+/, '').replace(/^Pix\s+/i, '').trim()
+        : l)
+      .filter(Boolean);
+    const desc = descLines.join(' ').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
+    const [dd, mm] = block.date.split('/');
+    tx.push(mkTx(`${dd}/${mm}/${year}`, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Banco Inter
+   Data:        "6 de Abril de 2026 Saldo do dia: R$ X"
+   Transação:   TIPO: "DESCRIÇÃO" [-]R$ VALOR R$ SALDO
+   Negativo = débito, positivo = crédito.
+*/
+function parseBancoInter(lines) {
+  const tx = []; let fail = 0;
+  const MONTHS = {
+    janeiro:'01',fevereiro:'02',março:'03',marco:'03',abril:'04',
+    maio:'05',junho:'06',julho:'07',agosto:'08',setembro:'09',
+    outubro:'10',novembro:'11',dezembro:'12'
+  };
+  // "6 de Abril de 2026"
+  const dateRe = /^(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i;
+  // TIPO: "DESC" [-]R$ VALOR R$ SALDO
+  const txRe   = /^(.+?):\s+"(.+?)"\s+(-?\s*R\$\s*[\d.]+,\d{2})\s+R\$\s*[\d.]+,\d{2}/;
+  const amtRe  = /(-?)\s*R\$\s*([\d.]+,\d{2})/;
+
+  let curDate = null;
+
+  for (const line of lines) {
+    const dm = line.match(dateRe);
+    if (dm) {
+      const mon = MONTHS[dm[2].toLowerCase()];
+      if (mon) curDate = `${String(dm[1]).padStart(2,'0')}/${mon}/${dm[3]}`;
+      continue;
+    }
+    if (!curDate) continue;
+
+    const tm = line.match(txRe);
+    if (!tm) continue;
+
+    const desc = (tm[1].trim() + ': ' + tm[2].trim()).slice(0, 80) || 'Transação';
+    const amM  = tm[3].match(amtRe);
+    if (!amM) { fail++; continue; }
+    const isNeg = amM[1] === '-';
+    const val   = parseAmt(amM[2]) * (isNeg ? -1 : 1);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    tx.push(mkTx(curDate, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* C6 Bank
+   Ano extraído do cabeçalho: "(01/07/2025 - 31/07/2025)"
+   Linha: DATA_LANC DATA_CONTABIL TIPO DESC [-]R$ VALOR
+   Data contábil = 2º campo; descrição = tudo entre 2ª data e o valor
+*/
+function parseC6Bank(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^Saldo do dia|^Data\s+lançamento|^Data\s+contábil|^Período|SAC:|Ouvidoria/i;
+
+  // Ano do cabeçalho
+  let year = String(new Date().getFullYear());
+  for (const l of lines) {
+    const m = l.match(/\(?\d{2}\/\d{2}\/(\d{4})\s*[-–]\s*\d{2}\/\d{2}\/\d{4}\)?/);
+    if (m) { year = m[1]; break; }
+  }
+
+  // Linha: DD/MM DD/MM <qualquer coisa> [-]R$ VALOR
+  const lineRe = /^(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+(-?\s*R\$\s*[\d.]+,\d{2})\s*$/;
+  const amtRe  = /(-?)\s*R\$\s*([\d.]+,\d{2})/;
+
+  for (const line of lines) {
+    if (skip.test(line.trim())) continue;
+    const m = line.match(lineRe);
+    if (!m) continue;
+    const [dd, mm] = m[2].split('/');
+    const date = `${dd}/${mm}/${year}`;
+    const desc = m[3].trim().slice(0, 80) || 'Transação';
+    const amM  = m[4].match(amtRe);
+    if (!amM) { fail++; continue; }
+    const val = parseAmt(amM[2]) * (amM[1].includes('-') ? -1 : 1);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    tx.push(mkTx(date, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+// ── Dispatch ──────────────────────────────────────────────────────────────
+function runParser(key, lines, items=[]) {
+  const yr = parseInt(document.getElementById('yearInput').value)||new Date().getFullYear();
+  switch(key){
+    case 'itau_bba':  return parseItauBBA(lines);
+    case 'daycoval':  return parseDaycoval(lines, yr);
+    case 'caixa':     return parseCaixa(lines);
+    case 'bradesco':  return parseBradesco(lines);
+    case 'bb':        return parseBB(lines);
+    case 'stone':     return parseStone(lines, items);
+    case 'viacredi':  return parseViaCredi(items, lines);
+    case 'santander': return parseSantander(lines);
+    case 'nubank':    return parseNubank(lines);
+    case 'pagbank':   return parsePagBank(lines);
+    case 'inter':     return parseBancoInter(lines);
+    case 'c6bank':    return parseC6Bank(lines);
+    case 'sicredi':   return parseSicredi(lines);
+    case 'unicred':   return parseUnicred(lines);
+    case 'asaas':     return parseAsaas(lines);
+    case 'sicoob':    return parseSicoob(lines);
+    case 'sicoob_b':  return parseSicoobB(lines);
+    default:          return { transactions:[], failures:0 };
+  }
+}
+
+// ── Auto-fill account ─────────────────────────────────────────────────────
+function autoFill(text, key) {
+  const P={
+    c6bank:    { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
+    inter:     { br:/Agência:\s*([\d-]+)/i,    ac:/Conta:\s*([\d-]+)/i },
+    daycoval:  { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
+    caixa:     { br:/\|\s*(\d{4})\s*\|/,       ac:/\|\s*([\d]+-?\d?)\s*\|/ },
+    bradesco:  { br:/Ag.*?(\d{5})/i,           ac:/([\d]+-\d)\s*$/m },
+    bb:        { br:/Agência:\s*([\d-]+)/i,      ac:/Conta:\s*([\d-]+)/i },
+    stone:     { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
+    viacredi:  { br:/Agência:\s*([\d-]+)/i,    ac:/Conta:\s*(\d+)/i },
+    santander: { br:/Agência[:\s]+(\d+)/i,      ac:/Conta Corrente[:\s]+([\d.]+[\d-]+)/i },
+    nubank:    { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
+    pagbank:   { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
+    sicredi:   { br:/Cooperativa:\s*(\d+)/i,   ac:/Conta:\s*([\d-]+)/i },
+    unicred:   { br:/AG:\s*(\d+)/i,            ac:/Conta:\s*(\d+)/i },
+    asaas:     { br:/Agência:\s*(\d+)/i,       ac:/Conta:\s*([\d\s-]+)/i },
+    sicoob:    { br:/Cooperativa:\s*([\d-]+)/i, ac:/Conta:\s*([\d.-]+)/i },
+    sicoob_b:  { br:/Cooperativa:\s*([\d-]+)/i, ac:/Conta:\s*([\d.-]+)/i },
+  };
+  const p=P[key]; if(!p) return;
+  const bm=text.match(p.br), am=text.match(p.ac);
+  if(bm) document.getElementById('cfgBranch').value=bm[1].trim();
+  if(am) document.getElementById('cfgAccount').value=am[1].trim();
+  if(BANKS[key]) document.getElementById('cfgBank').value=BANKS[key].code;
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────
+const ALL_BANK_OPTS = [
+  {v:'asaas',    l:'Asaas'},
+  {v:'bb',       l:'Banco do Brasil'},
+  {v:'bradesco', l:'Bradesco'},
+  {v:'c6bank',   l:'C6 Bank'},
+  {v:'caixa',    l:'Caixa Econômica Federal'},
+  {v:'daycoval', l:'Daycoval'},
+  {v:'inter',    l:'Banco Inter'},
+  {v:'itau_bba', l:'Itaú / Itaú BBA'},
+  {v:'nubank',   l:'Nubank'},
+  {v:'pagbank',  l:'PagBank / PagSeguro'},
+  {v:'santander',l:'Santander'},
+  {v:'sicoob',   l:'Sicoob'},
+  {v:'sicredi',  l:'Sicredi'},
+  {v:'stone',    l:'Stone'},
+  {v:'unicred',  l:'Unicred'},
+  {v:'viacredi', l:'Viacredi / Sistema Ailos'},
+];
+
+(function initDropdown() {
+  const input   = document.getElementById('ddInput');
+  const list    = document.getElementById('ddList');
+  const chevron = document.getElementById('ddChevron');
+  const hidden  = document.getElementById('bankSelect');
+  const wrap    = document.getElementById('ddWrap');
+  let isOpen = false, selectedVal = '';
+
+  function render(filter) {
+    const q = (filter || '').toLowerCase();
+    const filtered = ALL_BANK_OPTS.filter(o => !q || o.l.toLowerCase().includes(q));
+    list.innerHTML = '';
+    if (!filtered.length) {
+      list.innerHTML = '<div class="dd-empty">Nenhum banco encontrado</div>';
+      return;
+    }
+    filtered.forEach(o => {
+      const d = document.createElement('div');
+      d.className = 'dd-item' + (o.v === selectedVal ? ' selected' : '');
+      d.textContent = o.l;
+      d.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        selectedVal = o.v;
+        hidden.value = o.v;
+        input.value  = o.l;
+        close();
+        onBankChange();
+      });
+      list.appendChild(d);
+    });
+  }
+
+  function open() {
+    isOpen = true;
+    list.classList.add('open');
+    chevron.classList.add('open');
+    render(selectedVal ? '' : input.value);
+    input.select();
+  }
+
+  function close() {
+    isOpen = false;
+    list.classList.remove('open');
+    chevron.classList.remove('open');
+    if (selectedVal) input.value = (ALL_BANK_OPTS.find(o => o.v === selectedVal) || {}).l || '';
+    else input.value = '';
+  }
+
+  document.getElementById('ddTrigger').addEventListener('mousedown', function(e) {
+    if (e.target === input) return;
+    e.preventDefault();
+    isOpen ? close() : open();
+  });
+
+  input.addEventListener('focus', function() { if (!isOpen) open(); });
+  input.addEventListener('input', function() { render(input.value); });
+
+  document.addEventListener('mousedown', function(e) {
+    if (!wrap.contains(e.target)) close();
+  });
+})();
+
+function onBankChange() {
+  const sel  = document.getElementById('bankSelect').value;
+  const zone = document.getElementById('dropZone');
+  const hint = document.getElementById('bankHint');
+  document.getElementById('yearField').classList.toggle('hidden', sel !== 'daycoval');
+  if (sel) { zone.classList.remove('disabled'); hint.textContent = 'Banco: ' + (BANKS[sel]?.name || sel); }
+  else     { zone.classList.add('disabled');    hint.textContent = '← Selecione o banco primeiro'; }
+}
+
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+dropZone.addEventListener('dragover', e=>{e.preventDefault();dropZone.classList.add('over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('over');const f=e.dataTransfer.files[0];if(f?.type==='application/pdf')processPDF(f);});
+fileInput.addEventListener('change',e=>{if(e.target.files[0])processPDF(e.target.files[0]);});
+
+function logMsg(msg,cls=''){
+  const log=document.getElementById('log');
+  log.style.display='block';
+  const p=document.createElement('p');p.className=cls;p.textContent='> '+msg;
+  log.appendChild(p);log.scrollTop=log.scrollHeight;
+}
+
+function groupLines(items){
+  const byY={};
+  items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byY[y])byY[y]=[];byY[y].push(it.str);});
+  return Object.keys(byY).sort((a,b)=>b-a).map(y=>byY[y].join(' ').trim()).filter(l=>l);
+}
+
+async function processPDF(file){
+  const key=document.getElementById('bankSelect').value;
+  if(!key){alert('Selecione o banco primeiro.');return;}
+  logMsg('Carregando '+file.name+'...','ok');
+  const bar=document.getElementById('progressBar'),fill=document.getElementById('progressFill');
+  bar.style.display='block';fill.style.width='10%';
+
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      const pdf=await pdfjsLib.getDocument({data:e.target.result}).promise;
+      logMsg('PDF com '+pdf.numPages+' página(s)','ok');
+      let fullText='',allLines=[],allItems=[];
+      for(let i=1;i<=pdf.numPages;i++){
+        const page=await pdf.getPage(i);
+        const content=await page.getTextContent();
+        allItems=allItems.concat(content.items);
+        const lines=groupLines(content.items);
+        allLines=allLines.concat(lines);
+        fullText+=lines.join('\n')+'\n';
+        fill.style.width=(10+(i/pdf.numPages)*70)+'%';
+      }
+      logMsg('Texto extraído. Aplicando parser: '+(BANKS[key]?.name||key),'ok');
+      const result=runParser(key, allLines, allItems);
+      transactions=result.transactions;
+      parseFailures=result.failures;
+      logMsg('Detectadas '+transactions.length+' transações'+(parseFailures?' / '+parseFailures+' falhas.':'.'), transactions.length>0?'ok':'warn');
+      if(!transactions.length) logMsg('Nenhuma transação. Verifique se o banco selecionado está correto.','warn');
+      fill.style.width='100%';
+      autoFill(fullText,key);
+      renderTable();
+      document.getElementById('configSection').classList.remove('hidden');
+      document.getElementById('tableSection').classList.remove('hidden');
+    }catch(err){logMsg('Erro: '+err.message,'err');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────
+function renderTable(){
+  const tbody=document.getElementById('txBody');tbody.innerHTML='';
+  transactions.forEach((tx,i)=>appendRow(tx,i));
+  updateStats();
+}
+function appendRow(tx,i){
+  const tbody=document.getElementById('txBody');
+  const tr=document.createElement('tr');
+  const cls=tx.amount>=0?'amount-pos':'amount-neg';
+  tr.innerHTML=`
+    <td><input type="text" value="${tx.date}" onchange="updateTx(${i},'date',this.value)" style="width:90px"></td>
+    <td><input type="text" value="${escH(tx.desc)}" onchange="updateTx(${i},'desc',this.value)" style="width:100%"></td>
+    <td><input type="text" value="${tx.amount.toFixed(2).replace('.',',')}" onchange="updateTx(${i},'amount',this.value)" class="${cls}" style="width:100px;text-align:right"></td>
+    <td>
+      <select onchange="updateTx(${i},'type',this.value)">
+        <option value="CREDIT" ${tx.type==='CREDIT'?'selected':''}>Crédito</option>
+        <option value="DEBIT"  ${tx.type==='DEBIT' ?'selected':''}>Débito</option>
+      </select>
+    </td>
+    <td><button class="btn-danger" onclick="removeRow(${i})">✕</button></td>`;
+  tbody.appendChild(tr);
+}
+function updateTx(i,field,value){
+  if(field==='amount'){const v=parseFloat(value.replace(',','.'));transactions[i].amount=isNaN(v)?0:v;transactions[i].type=transactions[i].amount>=0?'CREDIT':'DEBIT';}
+  else transactions[i][field]=value;
+  updateStats();
+}
+function removeRow(i){transactions.splice(i,1);renderTable();}
+function addRow(){
+  const t=new Date();
+  transactions.push({date:String(t.getDate()).padStart(2,'0')+'/'+String(t.getMonth()+1).padStart(2,'0')+'/'+t.getFullYear(),desc:'',amount:0,type:'DEBIT'});
+  renderTable();
+}
+function updateStats(){
+  let cr=0,db=0;
+  transactions.forEach(t=>{if(t.amount>0)cr+=t.amount;else db+=t.amount;});
+  const fmt=v=>'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('statCredits').textContent=fmt(cr);
+  document.getElementById('statDebits').textContent=fmt(db);
+  const bal=cr+db, balEl=document.getElementById('statBalance');
+  balEl.textContent=(bal<0?'- ':'')+fmt(bal);
+  balEl.className='value '+(bal>=0?'amount-pos':'amount-neg');
+  document.getElementById('txCount').textContent=transactions.length+' convertidas';
+  const fe=document.getElementById('txFailed');
+  if(parseFailures>0){fe.textContent=parseFailures+' falhas';fe.classList.remove('hidden');}
+  else fe.classList.add('hidden');
+}
+
+// ── OFX Export ────────────────────────────────────────────────────────────
+function dateToOFX(d){if(!d)return'19700101';const p=d.split('/');if(p.length===3)return p[2]+p[1]+p[0];return d.replace(/\D/g,'').slice(0,8);}
+
+function exportOFX(){
+  if(!transactions.length){alert('Nenhuma transação para exportar.');return;}
+  const account=document.getElementById('cfgAccount').value||'00000000';
+  const branch =document.getElementById('cfgBranch').value ||'0001';
+  const bank   =document.getElementById('cfgBank').value   ||'000';
+  const dates  =transactions.map(t=>dateToOFX(t.date)).sort();
+  const dtS=dates[0], dtE=dates[dates.length-1];
+  const now=new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,14);
+  let trnLines='';
+  transactions.forEach((t,i)=>{
+    const fitid=dateToOFX(t.date)+'_'+String(i+1).padStart(4,'0');
+    const memo=(t.desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    trnLines+=`\n      <STMTTRN><TRNTYPE>${t.type}</TRNTYPE><DTPOSTED>${dateToOFX(t.date)}120000[-3:BRT]</DTPOSTED><TRNAMT>${t.amount.toFixed(2)}</TRNAMT><FITID>${fitid}</FITID><MEMO>${memo}</MEMO></STMTTRN>`;
+  });
+  const ofx=`OFXHEADER:100\nDATA:OFXSGML\nVERSION:151\nSECURITY:NONE\nENCODING:UTF-8\nCHARSET:1252\nCOMPRESSION:NONE\nOLDFILEUID:NONE\nNEWFILEUID:NONE\n\n<OFX><SIGNONMSGSRSV1><SONRS><STATUS><CODE>0</CODE><SEVERITY>INFO</SEVERITY></STATUS><DTSERVER>${now}[-3:BRT]</DTSERVER><LANGUAGE>POR</LANGUAGE></SONRS></SIGNONMSGSRSV1><BANKMSGSRSV1><STMTTRNRS><TRNUID>1</TRNUID><STATUS><CODE>0</CODE><SEVERITY>INFO</SEVERITY></STATUS><STMTRS><CURDEF>BRL</CURDEF><BANKACCTFROM><BANKID>${bank}</BANKID><BRANCHID>${branch}</BRANCHID><ACCTID>${account}</ACCTID><ACCTTYPE>CHECKING</ACCTTYPE></BANKACCTFROM><BANKTRANLIST><DTSTART>${dtS}120000[-3:BRT]</DTSTART><DTEND>${dtE}120000[-3:BRT]</DTEND>${trnLines}</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+  const blob=new Blob([ofx],{type:'application/x-ofx'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='extrato_'+dtS+'_'+dtE+'.ofx';a.click();
+  logMsg('OFX gerado: '+a.download,'ok');
+}
+
+function resetAll(){
+  transactions=[];parseFailures=0;
+  document.getElementById('txBody').innerHTML='';
+  document.getElementById('configSection').classList.add('hidden');
+  document.getElementById('tableSection').classList.add('hidden');
+  document.getElementById('log').style.display='none';
+  document.getElementById('log').innerHTML='';
+  document.getElementById('progressBar').style.display='none';
+  document.getElementById('progressFill').style.width='0%';
+  fileInput.value='';
+}
+</script>
+</body>
+</html>
