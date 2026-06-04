@@ -341,41 +341,61 @@ function parseBradesco(lines) {
 
   let lastDate = null;
   let pendDesc = null;
+  let tipoLine = ''; // buffer para linha de tipo (separada da data+valores pelo PDF.js)
 
   const commit = (date, fullText) => {
     if (skip.test(fullText)) return;
     const amts = [...fullText.matchAll(moneyRe())].map(m => m[0]);
     if (!amts.length) { fail++; return; }
-    const valStr = amts.length >= 2 ? amts[amts.length - 2] : amts[amts.length - 1];
+    // Prefere o primeiro valor negativo (corrige stream-order saldo/valor inconsistente)
+    const negAmt = amts.find(m => m.startsWith('-'));
+    const valStr = negAmt ?? (amts.length >= 2 ? amts[amts.length - 2] : amts[amts.length - 1]);
     const val = parseAmt(valStr);
     if (isNaN(val) || val === 0) { fail++; return; }
     const desc = fullText
       .replace(dateFullRe, '')
       .replace(moneyRe(), '')
-      .replace(/\b\d{4,10}\b/g, '')
+      .replace(/\b\d{3,10}\b/g, '') // era \d{4,10}: docs de 3 dígitos (793, 794) agora removidos
       .replace(/\s+/g, ' ').trim().slice(0, 80) || 'Transação';
     tx.push(mkTx(normDate(date), desc, val));
   };
 
   for (const line of lines) {
-    if (skip.test(line)) { pendDesc = null; continue; }
+    if (skip.test(line)) { pendDesc = null; tipoLine = ''; continue; }
     const dm = line.match(dateFullRe);
     const hasVal = [...line.matchAll(moneyRe())].length > 0;
 
     if (dm) {
       if (pendDesc !== null) { fail++; pendDesc = null; }
       lastDate = dm[1];
+      const afterDate = line.replace(dateFullRe, '').trim();
       if (hasVal) {
-        commit(lastDate, line);
+        // Usa tipoLine como prefixo quando afterDate começa com dígito (doc/valor sem descrição inline)
+        const full = (tipoLine && (!afterDate || /^\d/.test(afterDate)))
+          ? tipoLine + ' ' + line : line;
+        commit(lastDate, full);
+        tipoLine = '';
       } else {
-        pendDesc = line.replace(dateFullRe, '').trim();
+        pendDesc = tipoLine ? (tipoLine + ' ' + afterDate).trim() : afterDate;
+        tipoLine = '';
       }
     } else if (hasVal && lastDate) {
-      const full = pendDesc ? (pendDesc + ' ' + line) : line;
+      let full;
+      if (pendDesc !== null) {
+        full = pendDesc + ' ' + line; pendDesc = null;
+      } else if (tipoLine && /^\d/.test(line.trim())) {
+        // Linha começa com dígito = apenas doc+valores; prepende o tipo capturado
+        full = tipoLine + ' ' + line;
+      } else {
+        full = line;
+      }
       commit(lastDate, full);
-      pendDesc = null;
+      tipoLine = '';
     } else if (pendDesc !== null && line.trim()) {
       pendDesc += ' ' + line.trim();
+    } else if (line.trim()) {
+      // Linha de texto puro: atualiza tipoLine (substitui complemento anterior)
+      tipoLine = line.trim();
     }
   }
   return { transactions: tx, failures: fail };
@@ -499,7 +519,7 @@ function parseStone(lines, items) {
   if (!items || !items.length) return parseStoneText(lines);
 
   const tx = []; let fail = 0;
-  const xTipo=67, xDesc=112, xValor=285, xSaldo=355, xContra=422;
+  const xTipo=67, xDesc=112, xValor=250, xSaldo=355, xContra=422; // xValor: era 285; coluna real em x≈282
   const TOL = 2;
   const dateRe = /^\d{2}\/\d{2}\/\d{2}$/;
   const amtRe  = /^[\d.]+,\d{2}$/;
@@ -1152,6 +1172,7 @@ function parseUnicred(lines) {
   const tx = []; let fail = 0;
   const skip = /^Saldo em \d|^Saldo no final|^Lançamentos futuros|^Saldo atual|^Total disponível|^Saldo bloqueado|^Limite de|^IOF|^Juros|^Tarifas|^CENTRAL DE|^Período de|^Solicitado|^Data\s+Lançamentos|CENTRAL DE RELACIONAMENTO|^\d+\/\d+\s*$/i;
   let pend = null;
+  let descBuf = ''; // buffer para linha de descrição que aparece antes da linha de data+valores
 
   const commit = (date, text) => {
     const docIdx = text.indexOf('( Doc.:');
@@ -1161,20 +1182,30 @@ function parseUnicred(lines) {
     const amRe = /(-\s*R\$|R\$)\s*([\d.]+,\d{2})/g;
     const amts = [...afterDoc.matchAll(amRe)];
     if (!amts.length) { fail++; return; }
-    const isNeg = amts[0][1].includes('-');
-    const val = parseAmt(amts[0][2]) * (isNeg ? -1 : 1);
+    // Prefere o primeiro valor negativo (débito); fallback: último positivo
+    // Corrige stream-order: saldo aparece antes do valor no stream do PDF Unicred
+    const negAmt = amts.find(m => m[1].includes('-'));
+    const chosen = negAmt || amts[amts.length - 1];
+    const isNeg = chosen[1].includes('-');
+    const val = parseAmt(chosen[2]) * (isNeg ? -1 : 1);
     if (isNaN(val)||val===0) { fail++; return; }
     tx.push(mkTx(normDate(date), desc.slice(0,80)||'Transação', val));
   };
 
-  const isComplete = t => /\)\s*-?\s*R\$/.test(t) || (t.includes('R$') && !t.includes('( Doc.:'));
+  // isComplete: aceita ) antes de R$ (normal) OU R$ antes de ) (stream-order invertido)
+  const isComplete = t =>
+    /\)\s*-?\s*R\$/.test(t) ||
+    (t.includes('( Doc.:') && t.includes('R$') && /R\$[\s\S]*\)/.test(t)) ||
+    (t.includes('R$') && !t.includes('( Doc.:'));
 
   for (const line of lines) {
-    if (skip.test(line.trim())) { if (pend) { fail++; pend=null; } continue; }
+    if (skip.test(line.trim())) { if (pend) { fail++; pend=null; } descBuf=''; continue; }
     const dm = line.match(dateFullRe);
     if (dm) {
       if (pend) { fail++; pend=null; }
-      const rest = line.replace(dateFullRe,'').trim();
+      // Prepende descrição bufferizada à linha de data+valores
+      const rest = (descBuf ? descBuf + ' ' : '') + line.replace(dateFullRe,'').trim();
+      descBuf = '';
       if (isComplete(rest)) {
         commit(dm[1], rest);
       } else {
@@ -1186,6 +1217,9 @@ function parseUnicred(lines) {
         commit(pend.date, pend.text);
         pend=null;
       }
+    } else if (!moneyRe().test(line) && line.trim()) {
+      // Linha sem R$ e sem data: bufferiza como descrição para a próxima data
+      descBuf = descBuf ? descBuf + ' ' + line.trim() : line.trim();
     }
   }
   if (pend) commit(pend.date, pend.text);
