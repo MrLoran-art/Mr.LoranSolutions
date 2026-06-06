@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cheque Especial — Importação Contábil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F4F3F0;
+    --surface: #FFFFFF;
+    --surface-2: #F0EFEc;
+    --border: #E2E0DA;
+    --border-mid: #CCCAC3;
+    --text-1: #1A1917;
+    --text-2: #5C5A55;
+    --text-3: #9B9890;
+    --blue: #185FA5;
+    --blue-bg: #E6F1FB;
+    --blue-text: #0C447C;
+    --green: #3B6D11;
+    --green-bg: #EAF3DE;
+    --green-text: #27500A;
+    --red: #A32D2D;
+    --red-bg: #FCEBEB;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text-1);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .page { max-width: 780px; margin: 0 auto; }
+
+  /* Header */
+  .page-header {
+    display: flex; align-items: flex-start; gap: 14px;
+    margin-bottom: 2rem;
+  }
+  .logo-mark {
+    width: 40px; height: 40px; border-radius: var(--radius-md);
+    background: var(--blue); display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; margin-top: 2px;
+  }
+  .logo-mark svg { width: 20px; height: 20px; }
+  .page-title { font-size: 18px; font-weight: 600; color: var(--text-1); line-height: 1.3; }
+  .page-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card-label {
+    font-size: 11px; font-weight: 600; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1.5px dashed var(--border-mid);
+    border-radius: var(--radius-md);
+    padding: 1.75rem 1rem;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    background: var(--surface-2);
+    cursor: pointer; transition: border-color .15s, background .15s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--blue); background: var(--blue-bg);
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { color: var(--text-3); }
+  .drop-title { font-size: 14px; font-weight: 500; color: var(--text-2); }
+  .drop-hint { font-size: 12px; color: var(--text-3); }
+  .drop-zone.has-file .drop-title { color: var(--blue); }
+  .drop-zone.has-file { border-color: var(--blue); border-style: solid; background: var(--blue-bg); }
+
+  /* Fields */
+  .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field-full { grid-column: 1 / -1; }
+  .field label {
+    font-size: 12px; font-weight: 500; color: var(--text-2);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .badge-csv {
+    font-size: 10px; font-weight: 600; background: var(--blue-bg);
+    color: var(--blue-text); padding: 1px 6px; border-radius: 4px;
+    letter-spacing: .02em;
+  }
+  .field input {
+    height: 38px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    padding: 0 10px; font-size: 14px; font-family: var(--mono);
+    background: var(--surface); color: var(--text-1);
+    transition: border-color .15s, box-shadow .15s;
+    outline: none;
+  }
+  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(24,95,165,.1); }
+  .field input[readonly] {
+    background: var(--surface-2); color: var(--text-3);
+    cursor: default; font-family: var(--mono);
+  }
+  .field input::placeholder { color: var(--text-3); font-family: var(--sans); font-size: 13px; }
+
+  /* Button */
+  .btn-generate {
+    width: 100%; height: 42px; border-radius: var(--radius-md);
+    border: none; background: var(--blue); color: #fff;
+    font-size: 14px; font-weight: 600; font-family: var(--sans);
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 14px; transition: background .15s, transform .1s;
+  }
+  .btn-generate:hover { background: #0C447C; }
+  .btn-generate:active { transform: scale(.99); }
+  .btn-generate:disabled { background: var(--border-mid); cursor: not-allowed; }
+  .btn-generate svg { width: 16px; height: 16px; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stat { background: var(--surface-2); border-radius: var(--radius-md); padding: 10px 12px; }
+  .stat-label { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 600; color: var(--text-1); font-family: var(--mono); }
+  .stat-value.accent { color: var(--blue); }
+  .stat-value.sm { font-size: 14px; padding-top: 3px; }
+
+  /* Preview header */
+  .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .btn-download {
+    display: flex; align-items: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-mid); background: var(--surface);
+    font-size: 13px; font-weight: 500; font-family: var(--sans);
+    color: var(--text-1); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .btn-download:hover { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+  .btn-download:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-download svg { width: 15px; height: 15px; }
+
+  /* Table */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--surface-2); padding: 8px 12px;
+    text-align: left; font-size: 11px; font-weight: 600;
+    color: var(--text-3); letter-spacing: .04em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-2); }
+  tbody td { padding: 8px 12px; color: var(--text-1); }
+  .mono { font-family: var(--mono); }
+  .td-muted { color: var(--text-3); font-family: var(--mono); font-size: 12px; }
+  .td-complement { color: var(--text-3); font-size: 12px; }
+
+  .tag {
+    display: inline-flex; align-items: center;
+    font-size: 11px; font-weight: 600; padding: 2px 8px;
+    border-radius: 4px; white-space: nowrap; letter-spacing: .02em;
+  }
+  .tag-prov { background: var(--blue-bg); color: var(--blue-text); }
+  .tag-rev { background: var(--green-bg); color: var(--green-text); }
+
+  /* Empty / Error state */
+  .empty-state {
+    text-align: center; padding: 2.5rem 1rem;
+    color: var(--text-3); font-size: 13px;
+  }
+  .empty-state svg { margin-bottom: 8px; opacity: .4; }
+
+  .alert {
+    border-radius: var(--radius-md); padding: 10px 14px;
+    font-size: 13px; margin-bottom: 10px; display: none;
+  }
+  .alert-error { background: var(--red-bg); color: var(--red); border: 1px solid #F7C1C1; }
+  .alert-error.show { display: block; }
+
+  /* TXT preview */
+  .txt-preview {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--surface-2); border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    padding: 12px 14px; max-height: 160px; overflow-y: auto;
+    color: var(--text-2); line-height: 1.8; white-space: pre;
+    display: none; margin-top: 10px;
+  }
+  .txt-preview.show { display: block; }
+  .txt-toggle {
+    background: none; border: none; font-size: 12px; color: var(--blue);
+    cursor: pointer; padding: 4px 0; font-family: var(--sans);
+    display: none;
+  }
+  .txt-toggle.show { display: inline-block; }
+
+  @media (max-width: 560px) {
+    .fields-grid { grid-template-columns: 1fr; }
+    .field-full { grid-column: 1; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-header">
+    <div class="logo-mark">
+      <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 5h12M4 9h8M4 13h10M4 17h6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="page-title">Cheque especial — importação contábil</div>
+      <div class="page-sub">Gerador de arquivo TXT para o sistema Único/Novo Visual</div>
+    </div>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="card">
+    <div class="card-label">1 — arquivo de origem</div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" accept=".csv" id="csvInput">
+      <svg class="drop-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="drop-title" id="dropTitle">Arraste o arquivo .csv ou clique para selecionar</div>
+      <div class="drop-hint">Consulta do Movimento Diário</div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card">
+    <div class="card-label">2 — parâmetros dos lançamentos</div>
+    <div class="alert alert-error" id="alertError"></div>
+    <div class="fields-grid">
+      <div class="field">
+        <label>Conta banco <span class="badge-csv">do CSV</span></label>
+        <input type="text" id="fContaBanco" readonly placeholder="Aguardando CSV...">
+      </div>
+      <div class="field">
+        <label>Conta cheque especial</label>
+        <input type="text" id="fContaCheque" value="763">
+      </div>
+      <div class="field">
+        <label>Histórico</label>
+        <input type="text" id="fHistorico" placeholder="Opcional">
+      </div>
+      <div class="field">
+        <label>Lote</label>
+        <input type="text" id="fLote" placeholder="Opcional">
+      </div>
+      <div class="field field-full">
+        <label>Complemento</label>
+        <input type="text" id="fComplemento" value="Limite Cheque Especial">
+      </div>
+    </div>
+    <button class="btn-generate" id="btnGenerate" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+      Gerar lançamentos
+    </button>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card">
+    <div class="preview-header">
+      <div class="card-label" style="margin-bottom:0;">3 — prévia dos lançamentos</div>
+      <button class="btn-download" id="btnDownload" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Baixar .txt
+      </button>
+    </div>
+
+    <div class="stats" id="statsRow">
+      <div class="stat"><div class="stat-label">Total de linhas</div><div class="stat-value accent" id="statTotal">—</div></div>
+      <div class="stat"><div class="stat-label">Provisões</div><div class="stat-value" id="statProv">—</div></div>
+      <div class="stat"><div class="stat-label">Reversões</div><div class="stat-value" id="statRev">—</div></div>
+      <div class="stat"><div class="stat-label">Período</div><div class="stat-value sm" id="statPeriodo">—</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table id="previewTable">
+          <thead>
+            <tr>
+              <th style="width:44px;">#</th>
+              <th style="width:88px;">Tipo</th>
+              <th style="width:90px;">Data</th>
+              <th style="width:80px;">Débito</th>
+              <th style="width:80px;">Crédito</th>
+              <th style="width:110px;">Valor</th>
+              <th>Complemento</th>
+            </tr>
+          </thead>
+          <tbody id="previewBody">
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                  <div>Carregue um CSV e clique em gerar lançamentos</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="txt-toggle" id="txtToggle">Mostrar prévia do TXT ▾</button>
+    <div class="txt-preview" id="txtPreview"></div>
+  </div>
+
+</div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const csvInput = document.getElementById('csvInput');
+  const dropTitle = document.getElementById('dropTitle');
+  const btnGenerate = document.getElementById('btnGenerate');
+  const btnDownload = document.getElementById('btnDownload');
+  const fContaBanco = document.getElementById('fContaBanco');
+  const fContaCheque = document.getElementById('fContaCheque');
+  const fHistorico = document.getElementById('fHistorico');
+  const fLote = document.getElementById('fLote');
+  const fComplemento = document.getElementById('fComplemento');
+  const alertError = document.getElementById('alertError');
+  const previewBody = document.getElementById('previewBody');
+  const txtPreview = document.getElementById('txtPreview');
+  const txtToggle = document.getElementById('txtToggle');
+
+  let csvRows = [];
+  let generatedLines = [];
+  let txtContent = '';
+
+  // ── Drag and drop ──────────────────────────────────────────────
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+  csvInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  function handleFile(file) {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      showError('Selecione um arquivo .csv válido.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => parseCSV(e.target.result, file.name);
+    reader.readAsText(file, 'latin1');
+  }
+
+  // ── CSV parsing ─────────────────────────────────────────────────
+  function parseCSV(text, filename) {
+    hideError();
+    // Normalize line endings
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+
+    // Detect delimiter (semicolon or comma)
+    const delim = lines[0].includes(';') ? ';' : ',';
+
+    // Row 1 (index 0): Empresa / Conta
+    const row1 = lines[0].split(delim);
+    // Conta banco: in the CSV the account number is at col 11 (L in Excel)
+    const contaBanco = (row1[11] || '').trim();
+    if (!contaBanco) {
+      showError('Não foi possível identificar a Conta Banco no CSV. Verifique o arquivo.');
+      return;
+    }
+    fContaBanco.value = contaBanco;
+
+    // Data rows start at line index 6 (Excel row 7) — skip header rows
+    // Col 0 = Date, Col 10 = Saldo atual (K in Excel, 0-indexed = 10)
+    const dataRows = [];
+    for (let i = 6; i < lines.length; i++) {
+      const cols = lines[i].split(delim);
+      if (!cols[0] || !cols[0].trim()) continue;
+      const dateStr = cols[0].trim();
+      // Validate date format DD/MM/YYYY
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) continue;
+      const rawSaldo = (cols[10] || '').trim();
+      if (!rawSaldo) continue;
+      const saldo = parseBRNumber(rawSaldo);
+      if (isNaN(saldo)) continue;
+      dataRows.push({ dateStr, saldo });
+    }
+
+    if (dataRows.length === 0) {
+      showError('Nenhum dado válido encontrado no CSV. Verifique o formato do arquivo.');
+      return;
+    }
+
+    csvRows = dataRows;
+    dropZone.classList.add('has-file');
+    dropTitle.textContent = filename;
+    btnGenerate.disabled = false;
+    hideError();
+  }
+
+  function parseBRNumber(str) {
+    // Handles: (85.429,57) or -85.429,57 or 85.429,57
+    let s = str.trim();
+    let negative = false;
+    if (s.startsWith('(') && s.endsWith(')')) { negative = true; s = s.slice(1, -1); }
+    if (s.startsWith('-')) { negative = true; s = s.slice(1); }
+    // Remove thousand separators (dots) and replace decimal comma with dot
+    s = s.replace(/\./g, '').replace(',', '.');
+    const val = parseFloat(s);
+    return negative ? -val : val;
+  }
+
+  function formatBR(num) {
+    return Math.abs(num).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function formatTXTValue(num) {
+    return Math.abs(num).toFixed(2);
+  }
+
+  function dateToYYYYMMDD(dateStr) {
+    // DD/MM/YYYY → YYYYMMDD
+    const [d, m, y] = dateStr.split('/');
+    return `${y}${m}${d}`;
+  }
+
+  function addOneDayStr(dateStr) {
+    // Add one calendar day to DD/MM/YYYY
+    const [d, m, y] = dateStr.split('/').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + 1);
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const yy = dt.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  function formatDisplayDate(dateStr) {
+    // DD/MM/YYYY → DD/MM/YY
+    const parts = dateStr.split('/');
+    return `${parts[0]}/${parts[1]}/${parts[2].slice(2)}`;
+  }
+
+  // ── Generate ────────────────────────────────────────────────────
+  document.getElementById('btnGenerate').addEventListener('click', generate);
+
+  function generate() {
+    hideError();
+    const contaBanco = fContaBanco.value.trim();
+    const contaCheque = fContaCheque.value.trim();
+    const historico = fHistorico.value.trim();
+    const complemento = fComplemento.value.trim();
+    const lote = fLote.value.trim();
+
+    if (!contaCheque) { showError('Informe a Conta Cheque Especial.'); return; }
+    if (!complemento) { showError('O campo Complemento é obrigatório.'); return; }
+
+    // Build pairs: find all negative saldo changes
+    const pairs = []; // { idaDate, voltaDate, valor }
+    const rows = csvRows;
+
+    // Previous saldo tracker (null = first row)
+    let prevSaldo = null;
+
+    for (let i = 0; i < rows.length; i++) {
+      const { dateStr, saldo } = rows[i];
+      const isFirst = prevSaldo === null;
+      const changed = !isFirst && saldo !== prevSaldo;
+
+      let isIDA = false;
+      if (isFirst && saldo < 0) isIDA = true;
+      else if (changed && saldo < 0) isIDA = true;
+
+      if (isIDA) {
+        // Find volta date: next row where saldo differs from current saldo
+        let voltaDate = null;
+        for (let j = i + 1; j < rows.length; j++) {
+          if (rows[j].saldo !== saldo) {
+            voltaDate = rows[j].dateStr;
+            break;
+          }
+        }
+        // If no change found, volta = last date + 1 day
+        if (!voltaDate) {
+          voltaDate = addOneDayStr(rows[rows.length - 1].dateStr);
+        }
+        pairs.push({ idaDate: dateStr, voltaDate, valor: saldo });
+      }
+
+      prevSaldo = saldo;
+    }
+
+    if (pairs.length === 0) {
+      showError('Nenhum saldo negativo encontrado no CSV para gerar lançamentos.');
+      return;
+    }
+
+    // Build output lines: pairs (provisão + reversão)
+    generatedLines = [];
+    let seq = 1;
+    for (const p of pairs) {
+      const valorAbs = formatTXTValue(p.valor);
+
+      // Provisão (IDA): D Conta Banco / C Conta Cheque
+      const provLine = buildLine(seq++, p.idaDate, contaBanco, contaCheque, valorAbs, historico, complemento, lote);
+      // Reversão (VOLTA): D Conta Cheque / C Conta Banco — mesmo valor
+      const revLine  = buildLine(seq++, p.voltaDate, contaCheque, contaBanco, valorAbs, historico, complemento, lote);
+
+      generatedLines.push({ type: 'prov', date: p.idaDate, debito: contaBanco, credito: contaCheque, valor: p.valor, complemento, line: provLine });
+      generatedLines.push({ type: 'rev',  date: p.voltaDate, debito: contaCheque, credito: contaBanco, valor: p.valor, complemento, line: revLine });
+    }
+
+    txtContent = generatedLines.map(l => l.line).join('\n');
+    renderPreview();
+    renderStats(pairs, rows);
+    btnDownload.disabled = false;
+
+    txtToggle.classList.add('show');
+    txtToggle.textContent = 'Mostrar prévia do TXT ▾';
+    txtPreview.classList.remove('show');
+  }
+
+  function buildLine(seq, dateStr, debito, credito, valor, historico, complemento, lote) {
+    const seqStr = String(seq).padStart(6, '0');
+    const dateYMD = dateToYYYYMMDD(dateStr);
+    const parts = [seqStr, dateYMD, debito, credito, valor, historico, complemento];
+    if (lote) parts.push(lote);
+    return parts.join(',');
+  }
+
+  function renderPreview() {
+    const html = generatedLines.map((l, idx) => {
+      const seq = String(idx + 1).padStart(3, '0');
+      const tagClass = l.type === 'prov' ? 'tag-prov' : 'tag-rev';
+      const tagLabel = l.type === 'prov' ? 'Provisão' : 'Reversão';
+      return `<tr>
+        <td class="td-muted">${seq}</td>
+        <td><span class="tag ${tagClass}">${tagLabel}</span></td>
+        <td class="mono" style="font-size:12px;">${formatDisplayDate(l.date)}</td>
+        <td class="mono" style="font-size:12px;">${l.debito}</td>
+        <td class="mono" style="font-size:12px;">${l.credito}</td>
+        <td class="mono" style="font-size:12px;">${formatBR(l.valor)}</td>
+        <td class="td-complement">${l.complemento}</td>
+      </tr>`;
+    }).join('');
+    previewBody.innerHTML = html;
+  }
+
+  function renderStats(pairs, rows) {
+    document.getElementById('statTotal').textContent = generatedLines.length;
+    document.getElementById('statProv').textContent = pairs.length;
+    document.getElementById('statRev').textContent = pairs.length;
+    const first = rows[0].dateStr;
+    const last = rows[rows.length - 1].dateStr;
+    const fmt = d => { const p = d.split('/'); return `${p[0]}/${p[1]}/${p[2].slice(2)}`; };
+    document.getElementById('statPeriodo').textContent = `${fmt(first)} – ${fmt(last)}`;
+  }
+
+  // ── Download ────────────────────────────────────────────────────
+  btnDownload.addEventListener('click', () => {
+    if (!txtContent) return;
+    const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cheque_especial_importacao.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── TXT toggle ──────────────────────────────────────────────────
+  txtToggle.addEventListener('click', () => {
+    const showing = txtPreview.classList.toggle('show');
+    txtToggle.textContent = showing ? 'Ocultar prévia do TXT ▴' : 'Mostrar prévia do TXT ▾';
+    if (showing) txtPreview.textContent = txtContent;
+  });
+
+  // ── Helpers ─────────────────────────────────────────────────────
+  function showError(msg) {
+    alertError.textContent = msg;
+    alertError.classList.add('show');
+  }
+  function hideError() {
+    alertError.classList.remove('show');
+  }
+</script>
+</body>
+</html>
