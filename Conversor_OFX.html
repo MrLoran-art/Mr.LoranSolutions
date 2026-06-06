@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Extrato → OFX</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424;
@@ -209,6 +210,7 @@ const BANKS = {
   stone:     { name: 'Stone',                   code: '197' },
   unicred:   { name: 'Unicred',                 code: '136' },
   viacredi:  { name: 'Viacredi / Sistema Ailos', code: '085' },
+  planilha:  { name: 'Planilha',                 code: '000' },
 };
 
 // ── Utilities ─────────────────────────────────────────────────────────────
@@ -515,100 +517,44 @@ function parseBBNew(lines) {
    em blocos de transação usando DATA + TIPO como âncora.
 */
 function parseStone(lines, items) {
-  // Fallback para texto puro se não houver items (não deve ocorrer)
-  if (!items || !items.length) return parseStoneText(lines);
+  const tx = [];
 
-  const tx = []; let fail = 0;
-  const xTipo=67, xDesc=112, xValor=250, xSaldo=355, xContra=422; // xValor: era 285; coluna real em x≈282
-  const TOL = 2;
-  const dateRe = /^\d{2}\/\d{2}\/\d{2}$/;
-  const amtRe  = /^[\d.]+,\d{2}$/;
-  const skipRe = /^(DATA|TIPO|DESCRI|VALOR|SALDO|CONTRAPARTE|Período|Extrato|Stone|ELO|Página|Emitido|Nome|Documento|Instituição|Agência|Conta|0001$)/i;
+  // Linhas de cabeçalho/rodapé a ignorar
+  const skipRe = /^(Extrato de conta corrente|Emitido em|Página\s|Dados da conta|Nome\s+Documento|Instituição|Stone Institu|Período:|DATA\s+TIPO|Informações do Comprovante|Código da|Ouvidoria|Se nosso|úteis, das|ouvidoria@stone|CNPJ|Dúvidas|Regiões Metropol|meajuda@stone|\d{2}\.\d{3}\.\d{3}\/)/i;
 
-  // 1. Agrupar items por linha Y (tolerância ±2)
-  const rowMap = {};
-  items.forEach(it => {
-    const y = it.transform[5];
-    const x = it.transform[4];
-    const s = (it.str || '').trim();
-    if (!s) return;
-    // encontra bucket Y existente dentro da tolerância
-    let key = null;
-    for (const k of Object.keys(rowMap)) {
-      if (Math.abs(parseFloat(k) - y) <= TOL) { key = k; break; }
-    }
-    if (key === null) { key = String(y); rowMap[key] = []; }
-    rowMap[key].push({ x, s });
-  });
+  // Linha âncora: DD/MM/YY   Entrada|Saída   [inlineDesc]   [-] R$ VALOR
+  const dateLineRe = /^(\d{2}\/\d{2}\/\d{2})\s+(Entrada|Sa[íi]da)\s*(.*?)\s*(-\s*R\$|R\$)\s*([\d.]+,\d{2})/i;
 
-  // 2. Ordenar linhas de cima para baixo (Y decrescente em PDF)
-  const rows = Object.keys(rowMap)
-    .sort((a, b) => parseFloat(b) - parseFloat(a))
-    .map(k => {
-      const cells = rowMap[k].sort((a, b) => a.x - b.x);
-      const data   = cells.filter(c => c.x < xTipo).map(c => c.s).join(' ').trim();
-      const tipo   = cells.filter(c => c.x >= xTipo && c.x < xDesc).map(c => c.s).join(' ').trim();
-      const desc   = cells.filter(c => c.x >= xDesc && c.x < xValor).map(c => c.s).join(' ').trim();
-      const valor  = cells.filter(c => c.x >= xValor && c.x < xSaldo).map(c => c.s).join(' ').trim();
-      return { data, tipo, desc, valor };
-    })
-    .filter(r => r.data || r.tipo || r.desc || r.valor);
-
-  // 3. Montar transações: âncora = linha com DATA válida
-  let i = 0;
-  while (i < rows.length) {
-    const r = rows[i];
-    if (!dateRe.test(r.data) || !r.tipo || skipRe.test(r.desc)) { i++; continue; }
-
-    const [dd, mm, yy] = r.data.split('/');
-    const fullDate = `${dd}/${mm}/20${yy}`;
-    const isSaida  = /sa[íi]da/i.test(r.tipo);
-
-    // Acumula linhas de descrição seguintes (sem data e sem valor próprio)
-    const descParts = r.desc ? [r.desc] : [];
-    let valor = r.valor;
-    let j = i + 1;
-    while (j < rows.length && !dateRe.test(rows[j].data)) {
-      if (rows[j].desc) descParts.push(rows[j].desc);
-      if (!valor && rows[j].valor) valor = rows[j].valor;
-      j++;
-    }
-
-    // Limpar valor: remover "- R$", "R$", espaços
-    const valClean = (valor || '').replace(/[-–]\s*R\$\s*/,'').replace(/R\$\s*/,'').trim();
-    const val = valClean ? (isSaida ? -parseAmt(valClean) : parseAmt(valClean)) : NaN;
-
-    const desc = descParts.join(' ').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
-
-    if (!isNaN(val) && val !== 0) tx.push(mkTx(fullDate, desc, val));
-    else fail++;
-    i = j;
+  // Monta lista limpa (sem cabeçalhos/rodapés/vazias)
+  const cl = [];
+  for (const l of lines) {
+    const t = l.trim();
+    if (!t || skipRe.test(t)) continue;
+    cl.push(t);
   }
-  return { transactions: tx, failures: fail };
-}
 
-/* Stone fallback por texto (caso items não disponível) */
-function parseStoneText(lines) {
-  const tx = []; let fail = 0;
-  const sRe = /^(\d{2}\/\d{2}\/\d{2})\s+(Sa[íi]da|Entrada)/i;
-  for (let i = 0; i < lines.length; i++) {
-    const sm = lines[i].match(sRe);
-    if (!sm) continue;
-    const isSaida = /sa[íi]da/i.test(sm[2]);
-    const [dd,mm,yy] = sm[1].split('/');
-    const fullDate = `${dd}/${mm}/20${yy}`;
-    let collected = lines[i], j = i+1;
-    while (j < lines.length && !sRe.test(lines[j])) { collected += ' ' + lines[j]; j++; }
-    const negM = [...collected.matchAll(/[-–]\s*R\$\s*([\d.]+,\d{2})/g)];
-    const posM = [...collected.matchAll(/R\$\s*([\d.]+,\d{2})/g)];
-    let val = NaN;
-    if (isSaida && negM.length) val = -parseAmt(negM[0][1]);
-    else if (!isSaida && posM.length) val = parseAmt(posM[0][1]);
-    if (!isNaN(val) && val !== 0) tx.push(mkTx(fullDate, 'Transação', val));
-    else fail++;
-    i = j - 1;
+  for (let i = 0; i < cl.length; i++) {
+    const dm = cl[i].match(dateLineRe);
+    if (!dm) continue;
+
+    const [, dateStr, tipo, inlineRaw, sign, amount] = dm;
+    const [dd, mm, yy] = dateStr.split('/');
+    const date    = `${dd}/${mm}/20${yy}`;
+    const isSaida = /sa[íi]da/i.test(tipo);
+    const val     = parseAmt(amount) * (isSaida ? -1 : 1);
+
+    // preDesc: linha anterior se não for linha de data
+    const pre  = (i > 0 && !dateLineRe.test(cl[i - 1])) ? cl[i - 1] : '';
+    // postDesc: linha seguinte se não for linha de data
+    const post = (i + 1 < cl.length && !dateLineRe.test(cl[i + 1])) ? cl[i + 1] : '';
+
+    const desc = [pre, inlineRaw.trim(), post]
+      .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Transação';
+
+    if (!isNaN(val) && val !== 0) tx.push(mkTx(date, desc, val));
   }
-  return { transactions: tx, failures: fail };
+
+  return { transactions: tx, failures: 0 };
 }
 
 /* Viacredi / Sistema Ailos — detecta layout automaticamente
@@ -1170,7 +1116,7 @@ function parseSicredi(lines) {
 */
 function parseUnicred(lines) {
   const tx = []; let fail = 0;
-  const skip = /^Saldo em \d|^Saldo no final|^Lançamentos futuros|^Saldo atual|^Total disponível|^Saldo bloqueado|^Limite de|^IOF|^Juros|^Tarifas|^CENTRAL DE|^Período de|^Solicitado|^Data\s+Lançamentos|CENTRAL DE RELACIONAMENTO|^\d+\/\d+\s*$/i;
+  const skip = /^Saldo em \d|^Saldo no final|^Lançamentos futuros|^Saldo atual|^Total disponível|^Saldo bloqueado|^Limite de|^IOF|^Juros|^Tarifas|^CENTRAL DE|^Período de|^Solicitado|^Data\s+Lançamentos|CENTRAL DE RELACIONAMENTO|^\d+\/\d+\s*$|^0800\s|Lançamentos\s+Saldo|^Extrato\s*$/i;
   let pend = null;
   let descBuf = ''; // buffer para linha de descrição que aparece antes da linha de data+valores
 
@@ -1468,6 +1414,48 @@ function parseC6Bank(lines) {
   return { transactions:tx, failures:fail };
 }
 
+// ── Planilha (.csv / .xlsx) ───────────────────────────────────────────────
+
+/* Interpreta valor de célula com todos os formatos suportados:
+   Sufixo D/C, prefixo +/-, parênteses, natural positivo.
+   Remove R$ / $ antes de interpretar. */
+function parseSpreadsheetAmt(raw) {
+  if (raw === null || raw === undefined || raw === '') return NaN;
+  // Célula numérica do Excel (já parseada pelo SheetJS)
+  if (typeof raw === 'number') return raw;
+  let s = String(raw).trim();
+  // Remove indicador de moeda
+  s = s.replace(/R\$\s*/gi, '').replace(/\$\s*/g, '').trim();
+  let isDebit = false;
+  // Parênteses → débito
+  if (/^\(.*\)$/.test(s)) { isDebit = true; s = s.slice(1, -1).trim(); }
+  // Sufixo D/C
+  else if (/D$/i.test(s)) { isDebit = true;  s = s.slice(0, -1).trim(); }
+  else if (/C$/i.test(s)) { isDebit = false; s = s.slice(0, -1).trim(); }
+  // Prefixo +/-
+  if      (s.startsWith('-')) { isDebit = true;  s = s.slice(1).trim(); }
+  else if (s.startsWith('+')) { isDebit = false; s = s.slice(1).trim(); }
+  const val = parseAmt(s);
+  if (isNaN(val) || val === 0) return NaN;
+  return isDebit ? -val : val;
+}
+
+/* Processa array de rows [[data, hist, valor], ...] (sem cabeçalho) */
+function parseSpreadsheetRows(rows) {
+  const tx = []; let fail = 0;
+  for (const row of rows) {
+    const rawDate = (row[0] ?? '').toString().trim();
+    const rawDesc = (row[1] ?? '').toString().trim();
+    const rawVal  = row[2];
+    const date    = normDate(rawDate);
+    if (!date || !/^\d{2}\/\d{2}\/\d{4}$/.test(date)) { fail++; continue; }
+    const val = parseSpreadsheetAmt(rawVal);
+    if (isNaN(val)) { fail++; continue; }
+    tx.push(mkTx(date, rawDesc.slice(0, 80) || 'Transação', val));
+  }
+  return { transactions: tx, failures: fail };
+}
+
 // ── Dispatch ──────────────────────────────────────────────────────────────
 function runParser(key, lines, items=[]) {
   const yr = parseInt(document.getElementById('yearInput').value)||new Date().getFullYear();
@@ -1538,6 +1526,7 @@ const ALL_BANK_OPTS = [
   {v:'stone',    l:'Stone'},
   {v:'unicred',  l:'Unicred'},
   {v:'viacredi', l:'Viacredi / Sistema Ailos'},
+  {v:'planilha', l:'Planilha (.csv / .xlsx)'},
 ];
 
 (function initDropdown() {
@@ -1607,16 +1596,35 @@ function onBankChange() {
   const zone = document.getElementById('dropZone');
   const hint = document.getElementById('bankHint');
   document.getElementById('yearField').classList.toggle('hidden', sel !== 'daycoval');
-  if (sel) { zone.classList.remove('disabled'); hint.textContent = 'Banco: ' + (BANKS[sel]?.name || sel); }
-  else     { zone.classList.add('disabled');    hint.textContent = '← Selecione o banco primeiro'; }
+  const isPlanilha = sel === 'planilha';
+  fileInput.accept = isPlanilha ? '.csv,.xlsx' : '.pdf';
+  if (sel) {
+    zone.classList.remove('disabled');
+    hint.textContent = (isPlanilha ? 'Planilha: arraste .csv ou .xlsx' : 'Banco: ' + (BANKS[sel]?.name || sel));
+  } else {
+    zone.classList.add('disabled');
+    hint.textContent = '← Selecione o banco primeiro';
+  }
 }
 
 const dropZone=document.getElementById('dropZone');
 const fileInput=document.getElementById('fileInput');
 dropZone.addEventListener('dragover', e=>{e.preventDefault();dropZone.classList.add('over');});
 dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('over'));
-dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('over');const f=e.dataTransfer.files[0];if(f?.type==='application/pdf')processPDF(f);});
-fileInput.addEventListener('change',e=>{if(e.target.files[0])processPDF(e.target.files[0]);});
+dropZone.addEventListener('drop',e=>{
+  e.preventDefault();dropZone.classList.remove('over');
+  const f=e.dataTransfer.files[0];
+  if(!f) return;
+  const key=document.getElementById('bankSelect').value;
+  if(key==='planilha') processSpreadsheet(f);
+  else if(f.type==='application/pdf') processPDF(f);
+});
+fileInput.addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const key=document.getElementById('bankSelect').value;
+  if(key==='planilha') processSpreadsheet(f);
+  else processPDF(f);
+});
 
 function logMsg(msg,cls=''){
   const log=document.getElementById('log');
@@ -1629,6 +1637,45 @@ function groupLines(items){
   const byY={};
   items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byY[y])byY[y]=[];byY[y].push(it.str);});
   return Object.keys(byY).sort((a,b)=>b-a).map(y=>byY[y].join(' ').trim()).filter(l=>l);
+}
+
+async function processSpreadsheet(file) {
+  logMsg('Carregando ' + file.name + '...', 'ok');
+  const bar = document.getElementById('progressBar'), fill = document.getElementById('progressFill');
+  bar.style.display = 'block'; fill.style.width = '30%';
+  try {
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+    let rows = [];
+    if (isCSV) {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      // Detecta separador: ; ou ,
+      const sep = lines[0].includes(';') ? ';' : ',';
+      // Pula cabeçalho (linha 0)
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(sep).map(c => c.replace(/^"|"$/g, '').trim());
+        if (cols.length >= 3) rows.push(cols);
+      }
+    } else {
+      // XLSX via SheetJS
+      const buf = await file.arrayBuffer();
+      const wb  = XLSX.read(buf, { type: 'array', cellText: true, cellDates: false });
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      const all = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // Pula cabeçalho (linha 0)
+      rows = all.slice(1).filter(r => r.some(c => c !== ''));
+    }
+    fill.style.width = '70%';
+    const result = parseSpreadsheetRows(rows);
+    transactions = result.transactions;
+    parseFailures = result.failures;
+    logMsg('Detectadas ' + transactions.length + ' transações' + (parseFailures ? ' / ' + parseFailures + ' falhas.' : '.'), transactions.length > 0 ? 'ok' : 'warn');
+    if (!transactions.length) logMsg('Nenhuma transação encontrada. Verifique o formato da planilha.', 'warn');
+    fill.style.width = '100%';
+    renderTable();
+    document.getElementById('configSection').classList.remove('hidden');
+    document.getElementById('tableSection').classList.remove('hidden');
+  } catch(err) { logMsg('Erro: ' + err.message, 'err'); }
 }
 
 async function processPDF(file){
@@ -1723,22 +1770,89 @@ function dateToOFX(d){if(!d)return'19700101';const p=d.split('/');if(p.length===
 
 function exportOFX(){
   if(!transactions.length){alert('Nenhuma transação para exportar.');return;}
-  const account=document.getElementById('cfgAccount').value||'00000000';
-  const branch =document.getElementById('cfgBranch').value ||'0001';
-  const bank   =document.getElementById('cfgBank').value   ||'000';
-  const dates  =transactions.map(t=>dateToOFX(t.date)).sort();
-  const dtS=dates[0], dtE=dates[dates.length-1];
-  const now=new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,14);
-  let trnLines='';
-  transactions.forEach((t,i)=>{
-    const fitid=dateToOFX(t.date)+'_'+String(i+1).padStart(4,'0');
-    const memo=(t.desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    trnLines+=`\n      <STMTTRN><TRNTYPE>${t.type}</TRNTYPE><DTPOSTED>${dateToOFX(t.date)}120000[-3:BRT]</DTPOSTED><TRNAMT>${t.amount.toFixed(2)}</TRNAMT><FITID>${fitid}</FITID><MEMO>${memo}</MEMO></STMTTRN>`;
-  });
-  const ofx=`OFXHEADER:100\nDATA:OFXSGML\nVERSION:151\nSECURITY:NONE\nENCODING:UTF-8\nCHARSET:1252\nCOMPRESSION:NONE\nOLDFILEUID:NONE\nNEWFILEUID:NONE\n\n<OFX><SIGNONMSGSRSV1><SONRS><STATUS><CODE>0</CODE><SEVERITY>INFO</SEVERITY></STATUS><DTSERVER>${now}[-3:BRT]</DTSERVER><LANGUAGE>POR</LANGUAGE></SONRS></SIGNONMSGSRSV1><BANKMSGSRSV1><STMTTRNRS><TRNUID>1</TRNUID><STATUS><CODE>0</CODE><SEVERITY>INFO</SEVERITY></STATUS><STMTRS><CURDEF>BRL</CURDEF><BANKACCTFROM><BANKID>${bank}</BANKID><BRANCHID>${branch}</BRANCHID><ACCTID>${account}</ACCTID><ACCTTYPE>CHECKING</ACCTTYPE></BANKACCTFROM><BANKTRANLIST><DTSTART>${dtS}120000[-3:BRT]</DTSTART><DTEND>${dtE}120000[-3:BRT]</DTEND>${trnLines}</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
-  const blob=new Blob([ofx],{type:'application/x-ofx'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='extrato_'+dtS+'_'+dtE+'.ofx';a.click();
-  logMsg('OFX gerado: '+a.download,'ok');
+  const account = document.getElementById('cfgAccount').value || '00000000';
+  const branch  = document.getElementById('cfgBranch').value  || '0001';
+  const bank    = document.getElementById('cfgBank').value    || '000';
+  const key     = document.getElementById('bankSelect').value;
+  const bankName= (BANKS[key]?.name || key || 'EXTRATO')
+                    .toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_');
+  const dates   = transactions.map(t => dateToOFX(t.date)).sort();
+  const dtS = dates[0], dtE = dates[dates.length - 1];
+  const now = new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,14);
+
+  // FITID sequencial por data
+  const dateCount = {};
+  const trnLines = transactions.map(t => {
+    const d = dateToOFX(t.date);
+    dateCount[d] = (dateCount[d] || 0) + 1;
+    const fitid = d + String(dateCount[d]).padStart(2, '0');
+    const memo  = (t.desc || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return [
+      '<STMTTRN>',
+      `<TRNTYPE>${t.type}</TRNTYPE>`,
+      `<DTPOSTED>${d}</DTPOSTED>`,
+      `<TRNAMT>${t.amount.toFixed(2)}</TRNAMT>`,
+      `<FITID>${fitid}</FITID>`,
+      `<CHECKNUM>${fitid}</CHECKNUM>`,
+      `<MEMO>${memo}</MEMO>`,
+      '</STMTTRN>'
+    ].join('\n');
+  }).join('\n');
+
+  const ofx = [
+    'OFXHEADER:100',
+    'DATA:OFXSGML',
+    'VERSION:151',
+    'SECURITY:NONE',
+    'ENCODING:UTF-8',
+    'CHARSET:1252',
+    'COMPRESSION:NONE',
+    'OLDFILEUID:NONE',
+    'NEWFILEUID:NONE',
+    '',
+    '<OFX>',
+    '<SIGNONMSGSRSV1>',
+    '<SONRS>',
+    '<STATUS>',
+    '<CODE>0</CODE>',
+    '<SEVERITY>INFO</SEVERITY>',
+    '</STATUS>',
+    `<DTSERVER>${now}[-3:BRT]</DTSERVER>`,
+    '<LANGUAGE>POR</LANGUAGE>',
+    '</SONRS>',
+    '</SIGNONMSGSRSV1>',
+    '<BANKMSGSRSV1>',
+    '<STMTTRNRS>',
+    '<TRNUID>1</TRNUID>',
+    '<STATUS>',
+    '<CODE>0</CODE>',
+    '<SEVERITY>INFO</SEVERITY>',
+    '</STATUS>',
+    '<STMTRS>',
+    '<CURDEF>BRL</CURDEF>',
+    '<BANKACCTFROM>',
+    `<BANKID>${bank}</BANKID>`,
+    `<BRANCHID>${branch}</BRANCHID>`,
+    `<ACCTID>${account}</ACCTID>`,
+    '<ACCTTYPE>CHECKING</ACCTTYPE>',
+    '</BANKACCTFROM>',
+    '<BANKTRANLIST>',
+    `<DTSTART>${dtS}</DTSTART>`,
+    `<DTEND>${dtE}</DTEND>`,
+    trnLines,
+    '</BANKTRANLIST>',
+    '</STMTRS>',
+    '</STMTTRNRS>',
+    '</BANKMSGSRSV1>',
+    '</OFX>'
+  ].join('\n');
+
+  const blob = new Blob([ofx], {type: 'application/x-ofx'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `extrato_${bankName}_${dtS}_${dtE}.ofx`;
+  a.click();
+  logMsg('OFX gerado: ' + a.download, 'ok');
 }
 
 function resetAll(){
