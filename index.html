@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Mr. Loran Solutions</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#0f172a;
+    color:#fff;
+    min-height:100vh;
+}
+
+header{
+    background:linear-gradient(135deg,#2563eb,#1e40af);
+    padding:60px 20px;
+    text-align:center;
+}
+
+header h1{
+    font-size:3rem;
+    margin-bottom:10px;
+}
+
+header p{
+    color:#dbeafe;
+    font-size:1.1rem;
+}
+
+.container{
+    max-width:1200px;
+    margin:auto;
+    padding:50px 20px;
+}
+
+.section-title{
+    margin-bottom:30px;
+    font-size:1.8rem;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:25px;
+}
+
+.card{
+    background:#1e293b;
+    border:1px solid #334155;
+    border-radius:16px;
+    padding:25px;
+    transition:0.3s;
+}
+
+.card:hover{
+    transform:translateY(-5px);
+    border-color:#3b82f6;
+    box-shadow:0 10px 25px rgba(59,130,246,.25);
+}
+
+.card h3{
+    margin-bottom:10px;
+}
+
+.card p{
+    color:#94a3b8;
+    margin-bottom:20px;
+}
+
+.btn{
+    display:inline-block;
+    text-decoration:none;
+    background:#2563eb;
+    color:white;
+    padding:12px 20px;
+    border-radius:10px;
+    font-weight:600;
+}
+
+.btn:hover{
+    background:#3b82f6;
+}
+
+footer{
+    text-align:center;
+    padding:30px;
+    color:#94a3b8;
+    border-top:1px solid #1e293b;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Mr. Solutions</h1>
+    <p>Ferramentas e soluções para automação contábil</p>
+</header>
+
+<div class="container">
+
+    <h2 class="section-title">Aplicações Disponíveis</h2>
+
+    <div class="grid">
+
+        <div class="card">
+            <h3>📄 Conversor OFX</h3>
+            <p>
+                Converte arquivos financeiros para o formato OFX de forma rápida e simples.
+            </p>
+            <a class="btn" href="Conversor_OFX.html">
+                Acessar
+            </a>
+        </div>
+
+        <div class="card">
+            <h3>💰 Cheque Especial</h3>
+            <p>
+                Importação do Cheque Especial Contábil.
+            </p>
+            <a class="btn" href="Cheque_Especial.html">
+                Acessar
+            </a>
+        </div>
+
+        <div class="card">
+            <h3>⏳ Novo Projeto</h3>
+            <p>
+                Espaço reservado para futuras soluções.
+            </p>
+            <a class="btn" href="#">
+                Em breve
+            </a>
+        </div>
+
+    </div>
+
+</div>
+
+<footer>
+    © 2025 Mr.Loran Solutions
+</footer>
+
+</body>
+</html>
