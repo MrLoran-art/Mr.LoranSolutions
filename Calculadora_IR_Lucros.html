@@ -360,45 +360,7 @@
     <p>IRRF sobre distribuição de lucros — Lei nº 15.270, de 26 de novembro de 2025</p>
   </div>
 
-  <!-- Lion SVG -->
-  <svg width="68" height="52" viewBox="0 0 68 52" xmlns="http://www.w3.org/2000/svg" fill="none">
-    <!-- Tail -->
-    <path d="M6 36 Q2 28 4 20 Q7 12 12 15" stroke="#C9A227" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-    <ellipse cx="12.5" cy="13.5" rx="4" ry="3.5" fill="#C9A227"/>
-    <!-- Body -->
-    <ellipse cx="34" cy="38" rx="20" ry="11" fill="#C9A227"/>
-    <!-- Belly highlight -->
-    <ellipse cx="34" cy="40" rx="14" ry="7" fill="#D4AC30" opacity=".4"/>
-    <!-- Neck -->
-    <ellipse cx="51" cy="31" rx="7" ry="9" fill="#C9A227"/>
-    <!-- Mane -->
-    <circle cx="56" cy="24" r="13" fill="#A07A10"/>
-    <!-- Mane texture rays -->
-    <circle cx="56" cy="24" r="10" fill="#B8891E"/>
-    <!-- Head -->
-    <ellipse cx="57" cy="21" rx="9" ry="8" fill="#C9A227"/>
-    <!-- Ear -->
-    <path d="M62 14 L66 8 L68 15" fill="#C9A227"/>
-    <path d="M63 14 L66 10 L67.5 15" fill="#B8891E" opacity=".6"/>
-    <!-- Eye -->
-    <circle cx="61" cy="19" r="2" fill="#2a1a00"/>
-    <circle cx="62" cy="18.3" r=".7" fill="#fff" opacity=".7"/>
-    <!-- Nose -->
-    <path d="M64 23 Q66 21.5 68 23" stroke="#8B5E0A" stroke-width="1.2" stroke-linecap="round" fill="none"/>
-    <ellipse cx="66" cy="23.5" rx="1.5" ry="1" fill="#B8891E"/>
-    <!-- Mouth -->
-    <path d="M64.5 25 Q66 26.5 67.5 25" stroke="#8B5E0A" stroke-width="1" stroke-linecap="round" fill="none"/>
-    <!-- Front legs -->
-    <rect x="47" y="46" width="6" height="10" rx="3" fill="#C9A227"/>
-    <rect x="55" y="46" width="6" height="10" rx="3" fill="#B8891E"/>
-    <ellipse cx="50" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
-    <ellipse cx="58" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
-    <!-- Back legs -->
-    <rect x="20" y="46" width="6" height="10" rx="3" fill="#C9A227"/>
-    <rect x="28" y="46" width="6" height="10" rx="3" fill="#B8891E"/>
-    <ellipse cx="23" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
-    <ellipse cx="31" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
-  </svg>
+
 </div>
 
 <!-- ── CARD 1: MODALIDADE ── -->
@@ -469,7 +431,7 @@
 <!-- ── FOOTER ── -->
 <div class="fonte">
   Base legal: <a href="http://legislacao.planalto.gov.br/legisla/legislacao.nsf/Viw_Identificacao/lei%2015.270-2025?OpenDocument" target="_blank">LEI Nº 15.270, DE 26 DE NOVEMBRO DE 2025</a> — Art. 16-A, § 2º<br>
-  Alíquota mensal: 10% · Limite de isenção mensal: R$ 50.000 · Limite anual: R$ 600.000
+  10% mensal sobre valores acima de R$ 50.000,00 e tributação anual progressiva sobre valores superiores a R$ 600.000,00.
 </div>
 
 <script>
@@ -613,7 +575,7 @@
       const barWidth = Math.min((aliq / 0.10) * 100, 100).toFixed(1);
 
       content.innerHTML = `
-        <div class="result-grid">
+        <div class="result-grid" style="grid-template-columns:1fr 1fr;">
           <div class="result-item">
             <div class="result-label">Rendimento Anual</div>
             <div class="result-value">${fmt(rend)}</div>
@@ -623,11 +585,6 @@
             <div class="result-label">IR Devido (Anual)</div>
             <div class="result-value">${fmt(imposto)}</div>
             <div class="result-sub">Alíquota ${fmtPct(aliq)}</div>
-          </div>
-          <div class="result-item highlight">
-            <div class="result-label">Rendimento Líquido</div>
-            <div class="result-value">${fmt(liquido)}</div>
-            <div class="result-sub">Após apuração anual</div>
           </div>
         </div>
         <hr class="divider">
