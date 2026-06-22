@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora IR sobre Lucros — Lei nº 15.270/2025</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #87CEEB;
+    --blue-dark: #5AADCC;
+    --blue-text: #1a6e8e;
+    --blue-bg: #e8f6fb;
+    --blue-border: #a8ddf0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #eae7e1;
+    color: #1a1a1a;
+    min-height: 100vh;
+    padding: 32px 16px 64px;
+  }
+
+  /* ── HEADER ── */
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 760px;
+    margin: 0 auto 28px;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .header-text { flex: 1; }
+
+  .page-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111;
+    line-height: 1.2;
+  }
+
+  .page-header p {
+    font-size: 13px;
+    color: #888;
+    margin-top: 3px;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 28px 28px 24px;
+    max-width: 760px;
+    margin: 0 auto 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 20px;
+  }
+
+  /* ── TABS ── */
+  .tab-row {
+    display: flex;
+    background: #f0ede8;
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: #777;
+    cursor: pointer;
+    transition: all .18s;
+    font-family: inherit;
+  }
+
+  .tab-btn.active {
+    background: #fff;
+    color: #111;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+  }
+
+  /* ── SUB-TABS ── */
+  .sub-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+
+  .sub-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1.5px solid #d8d4ce;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: #777;
+    cursor: pointer;
+    transition: all .18s;
+    font-family: inherit;
+  }
+
+  .sub-btn.active {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: var(--blue-text);
+    font-weight: 600;
+  }
+
+  /* ── INPUTS ── */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 13px; font-weight: 500; color: #444; }
+
+  .input-wrap { position: relative; display: flex; align-items: center; }
+
+  .currency-prefix {
+    position: absolute;
+    left: 13px;
+    font-size: 14px;
+    color: #999;
+    font-weight: 500;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 11px 13px 11px 36px;
+    border: 1.5px solid #e0ddd8;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #111;
+    background: #fff;
+    outline: none;
+    transition: border-color .18s;
+    font-family: inherit;
+    letter-spacing: .01em;
+  }
+
+  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(135,206,235,.18); }
+  .field input::placeholder { color: #ccc; }
+
+  .field-hint {
+    font-size: 11.5px;
+    color: #aaa;
+    margin-top: 1px;
+  }
+
+  /* ── BADGE ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--blue-bg);
+    color: var(--blue-text);
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* ── RESULT CARD ── */
+  .result-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 28px;
+    max-width: 760px;
+    margin: 0 auto 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+    display: none;
+  }
+
+  .result-card.visible { display: block; }
+
+  .result-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 580px) { .result-grid { grid-template-columns: 1fr 1fr; } }
+
+  .result-item {
+    background: #f7f5f2;
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  .result-item.highlight {
+    background: var(--blue-bg);
+    border: 1.5px solid var(--blue-border);
+  }
+
+  .result-item.danger {
+    background: #fff7ed;
+    border: 1.5px solid #fed7aa;
+  }
+
+  .result-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #aaa;
+    margin-bottom: 8px;
+  }
+
+  .result-value {
+    font-size: 19px;
+    font-weight: 700;
+    color: #111;
+    line-height: 1;
+  }
+
+  .result-item.highlight .result-value { color: var(--blue-text); }
+  .result-item.danger .result-value { color: #c2410c; }
+
+  .result-sub {
+    font-size: 11.5px;
+    color: #aaa;
+    margin-top: 4px;
+  }
+
+  /* ── ISENTO ── */
+  .isento-banner {
+    background: #f0fdf4;
+    border: 1.5px solid #bbf7d0;
+    border-radius: 10px;
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
+  .isento-banner svg { color: #16a34a; flex-shrink: 0; }
+  .isento-banner p { font-size: 15px; font-weight: 600; color: #15803d; }
+  .isento-banner span { font-size: 13px; color: #4ade80; display: block; font-weight: 400; margin-top: 2px; }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid #f0ede8; margin: 22px 0; }
+
+  /* ── ALIQUOTA BAR ── */
+  .aliq-bar-wrap { margin-top: 16px; }
+  .aliq-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 6px;
+  }
+  .aliq-bar-bg {
+    background: #f0ede8;
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .aliq-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--blue), var(--blue-dark));
+    transition: width .4s ease;
+  }
+
+  /* ── PANEL VISIBILITY ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── FOOTER ── */
+  .fonte {
+    max-width: 760px;
+    margin: 0 auto;
+    font-size: 12px;
+    color: #bbb;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .fonte a { color: var(--blue-dark); text-decoration: none; }
+  .fonte a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div class="page-header">
+  <div class="header-icons">
+    <!-- Calculator SVG -->
+    <svg width="48" height="58" viewBox="0 0 48 58" xmlns="http://www.w3.org/2000/svg">
+      <!-- Body -->
+      <rect x="2" y="2" width="44" height="54" rx="7" fill="#F5A623" stroke="#8B5E0A" stroke-width="2"/>
+      <!-- Body inner shadow/highlight -->
+      <rect x="5" y="5" width="38" height="48" rx="5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+      <!-- Solar panel -->
+      <rect x="7" y="7" width="34" height="9" rx="3" fill="#3a3a3a"/>
+      <line x1="12" y1="7" x2="12" y2="16" stroke="#555" stroke-width="1.2"/>
+      <line x1="17" y1="7" x2="17" y2="16" stroke="#555" stroke-width="1.2"/>
+      <line x1="22" y1="7" x2="22" y2="16" stroke="#555" stroke-width="1.2"/>
+      <line x1="27" y1="7" x2="27" y2="16" stroke="#555" stroke-width="1.2"/>
+      <line x1="32" y1="7" x2="32" y2="16" stroke="#555" stroke-width="1.2"/>
+      <line x1="37" y1="7" x2="37" y2="16" stroke="#555" stroke-width="1.2"/>
+      <!-- Display -->
+      <rect x="7" y="18" width="34" height="10" rx="3" fill="#b8e0f0" stroke="#7ab8d0" stroke-width="1"/>
+      <text x="38" y="26" font-family="monospace" font-size="7" fill="#2a7a9b" text-anchor="end">0,00</text>
+      <!-- Button grid 4x4 -->
+      <!-- Row 1 -->
+      <rect x="7"  y="31" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="17" y="31" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="27" y="31" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="37" y="31" width="4" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <text x="11" y="36.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">7</text>
+      <text x="21" y="36.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">8</text>
+      <text x="31" y="36.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">9</text>
+      <text x="39" y="36.5" font-family="sans-serif" font-size="4" fill="#3a2000" text-anchor="middle">÷</text>
+      <!-- Row 2 -->
+      <rect x="7"  y="39" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="17" y="39" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="27" y="39" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="37" y="39" width="4" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <text x="11" y="44.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">4</text>
+      <text x="21" y="44.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">5</text>
+      <text x="31" y="44.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">6</text>
+      <text x="39" y="44.5" font-family="sans-serif" font-size="4" fill="#3a2000" text-anchor="middle">×</text>
+      <!-- Row 3 -->
+      <rect x="7"  y="47" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="17" y="47" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="27" y="47" width="8" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <rect x="37" y="47" width="4" height="6" rx="2" fill="#f0d89a" stroke="#8B5E0A" stroke-width="1"/>
+      <text x="11" y="52.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">1</text>
+      <text x="21" y="52.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">2</text>
+      <text x="31" y="52.5" font-family="sans-serif" font-size="4.5" fill="#3a2000" text-anchor="middle">3</text>
+      <text x="39" y="52.5" font-family="sans-serif" font-size="4" fill="#3a2000" text-anchor="middle">−</text>
+    </svg>
+  </div>
+
+  <div class="header-text">
+    <h1>Calculadora IR sobre Lucros</h1>
+    <p>IRRF sobre distribuição de lucros — Lei nº 15.270, de 26 de novembro de 2025</p>
+  </div>
+
+  <!-- Lion SVG -->
+  <svg width="68" height="52" viewBox="0 0 68 52" xmlns="http://www.w3.org/2000/svg" fill="none">
+    <!-- Tail -->
+    <path d="M6 36 Q2 28 4 20 Q7 12 12 15" stroke="#C9A227" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    <ellipse cx="12.5" cy="13.5" rx="4" ry="3.5" fill="#C9A227"/>
+    <!-- Body -->
+    <ellipse cx="34" cy="38" rx="20" ry="11" fill="#C9A227"/>
+    <!-- Belly highlight -->
+    <ellipse cx="34" cy="40" rx="14" ry="7" fill="#D4AC30" opacity=".4"/>
+    <!-- Neck -->
+    <ellipse cx="51" cy="31" rx="7" ry="9" fill="#C9A227"/>
+    <!-- Mane -->
+    <circle cx="56" cy="24" r="13" fill="#A07A10"/>
+    <!-- Mane texture rays -->
+    <circle cx="56" cy="24" r="10" fill="#B8891E"/>
+    <!-- Head -->
+    <ellipse cx="57" cy="21" rx="9" ry="8" fill="#C9A227"/>
+    <!-- Ear -->
+    <path d="M62 14 L66 8 L68 15" fill="#C9A227"/>
+    <path d="M63 14 L66 10 L67.5 15" fill="#B8891E" opacity=".6"/>
+    <!-- Eye -->
+    <circle cx="61" cy="19" r="2" fill="#2a1a00"/>
+    <circle cx="62" cy="18.3" r=".7" fill="#fff" opacity=".7"/>
+    <!-- Nose -->
+    <path d="M64 23 Q66 21.5 68 23" stroke="#8B5E0A" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <ellipse cx="66" cy="23.5" rx="1.5" ry="1" fill="#B8891E"/>
+    <!-- Mouth -->
+    <path d="M64.5 25 Q66 26.5 67.5 25" stroke="#8B5E0A" stroke-width="1" stroke-linecap="round" fill="none"/>
+    <!-- Front legs -->
+    <rect x="47" y="46" width="6" height="10" rx="3" fill="#C9A227"/>
+    <rect x="55" y="46" width="6" height="10" rx="3" fill="#B8891E"/>
+    <ellipse cx="50" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
+    <ellipse cx="58" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
+    <!-- Back legs -->
+    <rect x="20" y="46" width="6" height="10" rx="3" fill="#C9A227"/>
+    <rect x="28" y="46" width="6" height="10" rx="3" fill="#B8891E"/>
+    <ellipse cx="23" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
+    <ellipse cx="31" cy="56" rx="4.5" ry="2" fill="#A07A10"/>
+  </svg>
+</div>
+
+<!-- ── CARD 1: MODALIDADE ── -->
+<div class="card">
+  <div class="section-label">1 — Modalidade de Cálculo</div>
+  <div class="tab-row">
+    <button class="tab-btn active" onclick="setMode('mensal', this)">Mensal</button>
+    <button class="tab-btn" onclick="setMode('anual', this)">Anual</button>
+  </div>
+</div>
+
+<!-- ── CARD 2: DADOS ── -->
+<div class="card">
+  <div class="section-label">2 — Dados do Rendimento</div>
+
+  <!-- MENSAL -->
+  <div id="panel-mensal" class="panel active">
+    <div class="sub-tabs">
+      <button class="sub-btn active" onclick="setSubMode('liquido', this)">A partir do Valor Líquido</button>
+      <button class="sub-btn" onclick="setSubMode('bruto', this)">A partir do Valor Bruto</button>
+    </div>
+
+    <div id="sub-liquido" class="panel active">
+      <div class="field">
+        <label>Valor Líquido Recebido <span class="badge">informado</span></label>
+        <div class="input-wrap">
+          <span class="currency-prefix">R$</span>
+          <input type="text" id="in-liquido" placeholder="0,00" inputmode="numeric" autocomplete="off"
+            oninput="onCurrencyInput(this)" onblur="onCurrencyBlur(this)">
+        </div>
+        <span class="field-hint">Valor que o sócio recebe na conta, já descontado o IR</span>
+      </div>
+    </div>
+
+    <div id="sub-bruto" class="panel">
+      <div class="field">
+        <label>Valor Bruto da Distribuição <span class="badge">informado</span></label>
+        <div class="input-wrap">
+          <span class="currency-prefix">R$</span>
+          <input type="text" id="in-bruto" placeholder="0,00" inputmode="numeric" autocomplete="off"
+            oninput="onCurrencyInput(this)" onblur="onCurrencyBlur(this)">
+        </div>
+        <span class="field-hint">Valor deliberado pela empresa antes da retenção do IR</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANUAL -->
+  <div id="panel-anual" class="panel">
+    <div class="field">
+      <label>Rendimento Anual Total <span class="badge">informado</span></label>
+      <div class="input-wrap">
+        <span class="currency-prefix">R$</span>
+        <input type="text" id="in-anual" placeholder="0,00" inputmode="numeric" autocomplete="off"
+          oninput="onCurrencyInput(this)" onblur="onCurrencyBlur(this)">
+      </div>
+      <span class="field-hint">Soma de todos os lucros distribuídos no ano. Isento até R$ 600.000</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── CARD 3: RESULTADO ── -->
+<div class="result-card" id="result-card">
+  <div class="section-label">3 — Resultado</div>
+  <div id="result-content"></div>
+</div>
+
+<!-- ── FOOTER ── -->
+<div class="fonte">
+  Base legal: <a href="http://legislacao.planalto.gov.br/legisla/legislacao.nsf/Viw_Identificacao/lei%2015.270-2025?OpenDocument" target="_blank">LEI Nº 15.270, DE 26 DE NOVEMBRO DE 2025</a> — Art. 16-A, § 2º<br>
+  Alíquota mensal: 10% · Limite de isenção mensal: R$ 50.000 · Limite anual: R$ 600.000
+</div>
+
+<script>
+  let mode = 'mensal';
+  let subMode = 'liquido';
+
+  /* ── Currency input mask ── */
+  function onCurrencyInput(el) {
+    // Keep only digits and one comma
+    let raw = el.value.replace(/\./g, '').replace(/,/g, '.');
+    // Strip non-numeric except dot
+    raw = raw.replace(/[^\d.]/g, '');
+    // Only one decimal point
+    const parts = raw.split('.');
+    if (parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join('');
+    // Limit to 2 decimal places while typing
+    if (parts[1] && parts[1].length > 2) {
+      raw = parts[0] + '.' + parts[1].slice(0, 2);
+    }
+    // Format thousands on integer part
+    const [intPart, decPart] = raw.split('.');
+    const intFormatted = intPart ? parseInt(intPart, 10).toLocaleString('pt-BR') : '';
+    el.value = decPart !== undefined ? intFormatted + ',' + decPart : intFormatted;
+    calcular();
+  }
+
+  function onCurrencyBlur(el) {
+    const num = parseBRL(el.value);
+    if (!num) { el.value = ''; return; }
+    el.value = num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    calcular();
+  }
+
+  function parseBRL(str) {
+    if (!str) return 0;
+    return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+
+  /* ── Mode switching ── */
+  function setMode(m, btn) {
+    mode = m;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + m).classList.add('active');
+    clearResult(); calcular();
+  }
+
+  function setSubMode(s, btn) {
+    subMode = s;
+    document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('[id^="sub-"]').forEach(p => p.classList.remove('active'));
+    document.getElementById('sub-' + s).classList.add('active');
+    clearResult(); calcular();
+  }
+
+  function clearResult() {
+    document.getElementById('result-card').classList.remove('visible');
+  }
+
+  /* ── Formatters ── */
+  const fmt = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const fmtPct = v => (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + '%';
+
+  /* ── Main calc ── */
+  function calcular() {
+    const rc = document.getElementById('result-card');
+    const content = document.getElementById('result-content');
+
+    if (mode === 'mensal') {
+      const activeId = subMode === 'liquido' ? 'in-liquido' : 'in-bruto';
+      const raw = parseBRL(document.getElementById(activeId).value);
+      if (!raw || raw <= 0) { clearResult(); return; }
+
+      let bruto, retencao, liquido, isento = false;
+
+      if (subMode === 'liquido') {
+        if (raw <= 50000) {
+          isento = true; bruto = raw; retencao = 0; liquido = raw;
+        } else {
+          retencao = (10 * raw) / 90;
+          bruto = raw + retencao;
+          liquido = raw;
+        }
+      } else {
+        if (raw <= 50000) {
+          isento = true; bruto = raw; retencao = 0; liquido = raw;
+        } else {
+          retencao = raw * 0.10;
+          bruto = raw;
+          liquido = raw - retencao;
+        }
+      }
+
+      rc.classList.add('visible');
+      if (isento) { content.innerHTML = isentoHTML('R$ 50.000,00', 'mensal'); return; }
+
+      const aliqEfetiva = retencao / bruto;
+      const barWidth = Math.min((aliqEfetiva / 0.10) * 100, 100).toFixed(1);
+
+      content.innerHTML = `
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-label">Rendimento Bruto</div>
+            <div class="result-value">${fmt(bruto)}</div>
+            <div class="result-sub">Valor antes da retenção</div>
+          </div>
+          <div class="result-item danger">
+            <div class="result-label">IR Retido (IRRF)</div>
+            <div class="result-value">${fmt(retencao)}</div>
+            <div class="result-sub">Alíquota 10% sobre o total</div>
+          </div>
+          <div class="result-item highlight">
+            <div class="result-label">Valor Líquido</div>
+            <div class="result-value">${fmt(liquido)}</div>
+            <div class="result-sub">Recebido pelo sócio</div>
+          </div>
+        </div>
+        <hr class="divider">
+        <div class="aliq-bar-wrap">
+          <div class="aliq-bar-label">
+            <span>Alíquota efetiva: <strong>${fmtPct(aliqEfetiva)}</strong></span>
+            <span>Teto mensal: 10%</span>
+          </div>
+          <div class="aliq-bar-bg"><div class="aliq-bar-fill" style="width:${barWidth}%"></div></div>
+        </div>`;
+
+    } else {
+      const rend = parseBRL(document.getElementById('in-anual').value);
+      if (!rend || rend <= 0) { clearResult(); return; }
+
+      let aliq = ((rend / 60000) - 10) / 100;
+      if (aliq > 0.10) aliq = 0.10;
+      const imposto = rend * aliq;
+
+      rc.classList.add('visible');
+      if (imposto <= 0) { content.innerHTML = isentoHTML('R$ 600.000,00', 'anual'); return; }
+
+      const liquido = rend - imposto;
+      const barWidth = Math.min((aliq / 0.10) * 100, 100).toFixed(1);
+
+      content.innerHTML = `
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-label">Rendimento Anual</div>
+            <div class="result-value">${fmt(rend)}</div>
+            <div class="result-sub">Base de cálculo</div>
+          </div>
+          <div class="result-item danger">
+            <div class="result-label">IR Devido (Anual)</div>
+            <div class="result-value">${fmt(imposto)}</div>
+            <div class="result-sub">Alíquota ${fmtPct(aliq)}</div>
+          </div>
+          <div class="result-item highlight">
+            <div class="result-label">Rendimento Líquido</div>
+            <div class="result-value">${fmt(liquido)}</div>
+            <div class="result-sub">Após apuração anual</div>
+          </div>
+        </div>
+        <hr class="divider">
+        <div class="aliq-bar-wrap">
+          <div class="aliq-bar-label">
+            <span>Alíquota efetiva: <strong>${fmtPct(aliq)}</strong> &nbsp;·&nbsp; Fórmula: (Rendimento ÷ 60.000) − 10</span>
+            <span>Teto: 10%</span>
+          </div>
+          <div class="aliq-bar-bg"><div class="aliq-bar-fill" style="width:${barWidth}%"></div></div>
+        </div>`;
+    }
+  }
+
+  function isentoHTML(limite, periodo) {
+    const label = periodo === 'mensal' ? 'no mês' : 'no ano';
+    return `
+      <div class="isento-banner">
+        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <div>
+          <p>Isento de IRRF</p>
+          <span>O valor informado está abaixo do limite de ${limite} ${label}. Não há retenção de imposto.</span>
+        </div>
+      </div>`;
+  }
+</script>
+</body>
+</html>
