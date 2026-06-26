@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pagamentos Schwanke</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --border: #dde1e7;
+    --border-light: #eef0f3;
+    --primary: #1a56a0;
+    --primary-dark: #154488;
+    --primary-light: #e8f0fb;
+    --accent: #0ea371;
+    --accent-light: #e6f7f1;
+    --warn: #c0392b;
+    --warn-light: #fdecea;
+    --text: #1c2333;
+    --text-mid: #4a5568;
+    --text-soft: #8a95a3;
+    --mono: 'Courier New', monospace;
+    --radius: 6px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--primary);
+    color: #fff;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    height: 52px;
+    gap: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  }
+  header .logo {
+    width: 28px; height: 28px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; letter-spacing: -0.5px;
+  }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; }
+  header .subtitle { font-size: 12px; color: rgba(255,255,255,0.65); margin-left: 4px; }
+
+  /* ── TABS ── */
+  .tab-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+  }
+  .tab-btn {
+    padding: 12px 20px;
+    border: none; background: none;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-mid);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--primary); }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* ── MAIN LAYOUT ── */
+  .page-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 28px 32px;
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text-soft);
+    margin-bottom: 14px;
+  }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .upload-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-zone p { font-size: 13px; color: var(--text-mid); }
+  .upload-zone .hint { font-size: 11px; color: var(--text-soft); margin-top: 4px; }
+  .upload-zone.loaded {
+    border-style: solid; border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .file-info {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; font-size: 13px; font-weight: 500; color: var(--accent);
+  }
+
+  /* ── FORM FIELDS ── */
+  .field-row {
+    display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;
+  }
+  .field-group { display: flex; flex-direction: column; gap: 5px; }
+  .field-group label {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-soft);
+  }
+  .field-group input {
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0 10px;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface);
+    transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  .field-group input:focus { outline: none; border-color: var(--primary); }
+  .field-group input.mono { font-family: var(--mono); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    height: 34px; padding: 0 16px;
+    border: none; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost {
+    background: none; border: 1px solid var(--border);
+    color: var(--text-mid);
+  }
+  .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-danger { background: none; border: 1px solid transparent; color: var(--warn); }
+  .btn-danger:hover { background: var(--warn-light); }
+  .btn-success { background: var(--accent); color: #fff; height: 38px; padding: 0 22px; font-size: 14px; }
+  .btn-success:hover { background: #0b8a5f; }
+  .btn-success:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: flex; align-items: center; gap: 24px;
+    padding: 12px 20px;
+    background: var(--primary-light);
+    border: 1px solid #c5d9f5;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+  .status-stat { display: flex; flex-direction: column; gap: 2px; }
+  .status-stat .val { font-size: 18px; font-weight: 700; color: var(--primary); }
+  .status-stat .lbl { font-size: 11px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.5px; }
+  .status-bar .spacer { flex: 1; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-soft);
+    white-space: nowrap;
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  tr:hover td { background: #f8f9fb; }
+  .mono-cell { font-family: var(--mono); font-size: 11px; }
+  .badge-ok {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    background: var(--accent-light); color: var(--accent);
+    border-radius: 20px; padding: 1px 8px;
+  }
+  .badge-warn {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    background: var(--warn-light); color: var(--warn);
+    border-radius: 20px; padding: 1px 8px;
+  }
+  .seq-num {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text-soft);
+  }
+  .complemento-cell {
+    font-size: 11px; color: var(--text-mid);
+    max-width: 300px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .empty-state {
+    text-align: center; padding: 48px 24px;
+    color: var(--text-soft); font-size: 13px;
+  }
+  .empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+
+  /* ── PARAMS TABLE ── */
+  .params-add-row {
+    display: flex; gap: 10px; align-items: flex-end;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--border-light);
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .num-col { width: 40px; color: var(--text-soft); font-family: var(--mono); font-size: 11px; }
+  .param-input {
+    border: 1px solid transparent; background: transparent;
+    border-radius: 4px; padding: 3px 6px;
+    font-size: 12px; font-family: var(--mono);
+    color: var(--text);
+    width: 100%;
+    transition: border-color 0.12s;
+  }
+  .param-input:focus { outline: none; border-color: var(--primary); background: var(--surface); }
+  .reset-link {
+    font-size: 12px; color: var(--text-soft); cursor: pointer;
+    text-decoration: underline;
+    background: none; border: none; padding: 0;
+  }
+  .reset-link:hover { color: var(--warn); }
+
+  /* ── MESSAGES ── */
+  .msg {
+    padding: 10px 14px; border-radius: var(--radius);
+    font-size: 13px; margin-bottom: 12px;
+    display: none;
+  }
+  .msg.error { background: var(--warn-light); color: var(--warn); border: 1px solid #f5c2be; display: block; }
+  .msg.success { background: var(--accent-light); color: #076b49; border: 1px solid #a7e6cf; display: block; }
+  .msg.info { background: var(--primary-light); color: var(--primary); border: 1px solid #c5d9f5; display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PS</div>
+  <h1>Pagamentos Schwanke</h1>
+  <span class="subtitle">— Geração de lançamentos contábeis</span>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('lancamentos')">Lançamentos</button>
+  <button class="tab-btn" onclick="switchTab('parametros')">Parâmetros</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  TAB: LANÇAMENTOS                                      -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="tab-lancamentos" class="tab-content active">
+<div class="page-wrap">
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-title">Arquivo de boletos</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".csv,.txt" onchange="handleFile(this.files[0])">
+      <div id="uploadLabel">
+        <div class="upload-icon">📂</div>
+        <p><strong>Clique para selecionar</strong> ou arraste o arquivo CSV aqui</p>
+        <p class="hint">Campos esperados: FORNECEDOR · CNPJ/CPF · DOCUMENTO · VALOR PAGO · PAGAMENTO</p>
+      </div>
+    </div>
+    <div id="uploadMsg" class="msg"></div>
+  </div>
+
+  <!-- Configurações -->
+  <div class="card">
+    <div class="card-title">Configurações de exportação</div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Filtrar por data de pagamento</label>
+        <input type="date" id="filterDate">
+      </div>
+      <div class="field-group">
+        <label>Lote</label>
+        <input type="text" id="loteInput" placeholder="Ex: 2026002011" class="mono" style="width:160px"
+               oninput="checkExportBtn()">
+      </div>
+      <div class="field-group" style="justify-content:flex-end">
+        <label style="visibility:hidden">.</label>
+        <button class="btn btn-primary" id="btnProcessar" onclick="renderPreview()" disabled>
+          ▶ Processar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="card">
+    <div class="card-title">Pré-visualização</div>
+
+    <div id="statusBar" style="display:none" class="status-bar">
+      <div class="status-stat">
+        <span class="val" id="statCount">0</span>
+        <span class="lbl">lançamentos</span>
+      </div>
+      <div class="status-stat">
+        <span class="val" id="statTotal">R$ 0,00</span>
+        <span class="lbl">valor total</span>
+      </div>
+      <div class="status-stat">
+        <span class="val" id="statSemParam">0</span>
+        <span class="lbl">sem parâmetro <span style="color:var(--text-mid)">(conta 504)</span></span>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-success" id="btnExport" onclick="exportTXT()" disabled>
+        ⬇ Exportar .TXT
+      </button>
+    </div>
+
+    <div id="previewWrap" class="table-wrap">
+      <div class="empty-state">
+        <div class="icon">📋</div>
+        <p>Faça upload de um CSV, selecione a data e clique em Processar.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  TAB: PARÂMETROS                                       -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="tab-parametros" class="tab-content">
+<div class="page-wrap">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div class="card-title" style="margin-bottom:0">Exceções de conta débito por CNPJ</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span style="font-size:12px; color:var(--text-soft)">Padrão sem exceção: conta <strong>504</strong></span>
+        <button class="reset-link" onclick="confirmReset()">Restaurar padrões</button>
+      </div>
+    </div>
+
+    <div id="paramsMsg" class="msg"></div>
+
+    <div class="table-wrap">
+      <table id="paramsTable">
+        <thead>
+          <tr>
+            <th class="num-col">#</th>
+            <th>CNPJ / CPF</th>
+            <th style="width:140px">Conta Débito</th>
+            <th style="width:60px"></th>
+          </tr>
+        </thead>
+        <tbody id="paramsTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="params-add-row">
+      <div class="field-group">
+        <label>CNPJ / CPF</label>
+        <input type="text" id="newCnpj" placeholder="00.000.000/0000-00" style="width:200px" class="mono">
+      </div>
+      <div class="field-group">
+        <label>Conta Débito</label>
+        <input type="text" id="newConta" placeholder="Ex: 510" style="width:120px" class="mono">
+      </div>
+      <button class="btn btn-primary" onclick="addParam()">+ Adicionar</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  PARÂMETROS DEFAULT
+// ═══════════════════════════════════════════════════════════════
+const DEFAULT_PARAMS = [
+  { cnpj: '00.428.307/0001-98', conta: '510' },
+  { cnpj: '00.574.570/0001-95', conta: '510' },
+  { cnpj: '01.610.798/0001-56', conta: '510' },
+  { cnpj: '02.360.122/0001-14', conta: '510' },
+  { cnpj: '02.360.122/0006-29', conta: '510' },
+  { cnpj: '02.558.157/0013-04', conta: '152080' },
+  { cnpj: '03.777.341/0001-66', conta: '153800' },
+  { cnpj: '03.777.341/0108-03', conta: '153800' },
+  { cnpj: '04.035.148/0001-12', conta: '510' },
+  { cnpj: '07.087.598/0001-47', conta: '510' },
+  { cnpj: '08.336.783/0001-90', conta: '152226' },
+  { cnpj: '10.290.556/0001-13', conta: '510' },
+  { cnpj: '10.700.543/0001-75', conta: '510' },
+  { cnpj: '13.817.856/0001-04', conta: '510' },
+  { cnpj: '14.826.324/0001-98', conta: '510' },
+  { cnpj: '16.829.560/0001-93', conta: '510' },
+  { cnpj: '17.206.249/0001-50', conta: '510' },
+  { cnpj: '22.779.616/0001-45', conta: '510' },
+  { cnpj: '25.288.467/0001-00', conta: '510' },
+  { cnpj: '25.532.798/0001-43', conta: '510' },
+  { cnpj: '31.996.864/0001-39', conta: '510' },
+  { cnpj: '33.164.021/0001-00', conta: '4648' },
+  { cnpj: '35.632.522/0001-90', conta: '510' },
+  { cnpj: '37.301.446/0001-66', conta: '9318' },
+  { cnpj: '46.918.010/0001-01', conta: '510' },
+  { cnpj: '55.154.543/0001-55', conta: '510' },
+  { cnpj: '56.916.079/0001-50', conta: '510' },
+  { cnpj: '59.258.530/0001-87', conta: '510' },
+  { cnpj: '61.198.164/0001-60', conta: '563048' },
+  { cnpj: '73.801.862/0001-97', conta: '510' },
+  { cnpj: '74.118.381/0001-44', conta: '562769' },
+  { cnpj: '79.257.291/0008-24', conta: '611746' },
+  { cnpj: '81.560.047/0001-01', conta: '510' },
+  { cnpj: '82.110.818/0001-21', conta: '510' },
+  { cnpj: '82.652.991/0001-51', conta: '2844' },
+  { cnpj: '82.653.585/0001-03', conta: '3450' },
+  { cnpj: '83.779.462/0001-86', conta: '4790' },
+  { cnpj: '85.348.407/0001-67', conta: '510' },
+  { cnpj: '93.986.032/0004-31', conta: '510' },
+  { cnpj: '94.492.899/0001-50', conta: '510' },
+  { cnpj: '94.846.755/0022-80', conta: '611746' },
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  ESTADO
+// ═══════════════════════════════════════════════════════════════
+let csvRows = [];
+let params = [];
+let filteredCount = 0;
+
+(function init() {
+  loadParams();
+  renderParams();
+  setupDragDrop();
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['lancamentos','parametros'][i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DRAG & DROP
+// ═══════════════════════════════════════════════════════════════
+function setupDragDrop() {
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FILE HANDLING
+// ═══════════════════════════════════════════════════════════════
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => processCSV(e.target.result, file.name);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function processCSV(text, filename) {
+  const msgEl = document.getElementById('uploadMsg');
+  msgEl.className = 'msg';
+
+  const firstLine = text.split('\n')[0];
+  const sep = firstLine.includes(';') ? ';' : ',';
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) {
+    showMsg(msgEl, 'error', 'Arquivo vazio ou sem dados após o cabeçalho.');
+    return;
+  }
+
+  const header = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+
+  const required = ['FORNECEDOR', 'CNPJ/CPF', 'DOCUMENTO', 'VALOR PAGO', 'PAGAMENTO'];
+  const missing = required.filter(f => !header.includes(f));
+  if (missing.length > 0) {
+    showMsg(msgEl, 'error', `Campos não encontrados: ${missing.join(', ')}. Verifique o arquivo.`);
+    return;
+  }
+
+  csvRows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i], sep);
+    const row = {};
+    header.forEach((h, idx) => {
+      row[h] = (cols[idx] || '').trim().replace(/^"|"$/g, '');
+    });
+    if (row['VALOR PAGO'] && parseFloat(row['VALOR PAGO'].replace(/\./g,'').replace(',','.')) > 0) {
+      csvRows.push(row);
+    }
+  }
+
+  const zone = document.getElementById('uploadZone');
+  zone.classList.add('loaded');
+  document.getElementById('uploadLabel').innerHTML = `
+    <div class="file-info">
+      <span>✅</span>
+      <span>${filename} — ${csvRows.length} registros carregados</span>
+      <span style="color:var(--text-soft); font-weight:400; font-size:11px">Clique para trocar</span>
+    </div>`;
+
+  showMsg(msgEl, 'success', `${csvRows.length} registros lidos. Selecione a data e clique em Processar.`);
+
+  // Sugerir primeira data
+  const datas = [...new Set(csvRows.map(r => r['PAGAMENTO']).filter(Boolean))].sort();
+  if (datas.length > 0 && !document.getElementById('filterDate').value) {
+    const d = parseCSVDate(datas[0]);
+    if (d) document.getElementById('filterDate').value = d;
+  }
+
+  document.getElementById('btnProcessar').disabled = false;
+
+  // Resetar preview
+  document.getElementById('statusBar').style.display = 'none';
+  document.getElementById('btnExport').disabled = true;
+  document.getElementById('previewWrap').innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Selecione a data e clique em Processar.</p></div>`;
+}
+
+function splitCSVLine(line, sep) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; continue; }
+    if (ch === sep && !inQuotes) { result.push(current); current = ''; continue; }
+    current += ch;
+  }
+  result.push(current);
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DATA HELPERS
+// ═══════════════════════════════════════════════════════════════
+function parseCSVDate(str) {
+  if (!str) return '';
+  const p = str.trim().split('/');
+  if (p.length !== 3) return '';
+  return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+}
+
+function csvDateToTXT(str) {
+  if (!str) return '';
+  const p = str.trim().split('/');
+  if (p.length !== 3) return '';
+  return `${p[2]}${p[1].padStart(2,'0')}${p[0].padStart(2,'0')}`;
+}
+
+function inputDateToCSV(str) {
+  if (!str) return '';
+  const p = str.split('-');
+  return `${p[2]}/${p[1]}/${p[0]}`;
+}
+
+function formatDateDisplay(str) {
+  // DD/MM/YYYY
+  if (!str) return '';
+  const p = str.trim().split('/');
+  if (p.length !== 3) return str;
+  return `${p[0]}/${p[1]}/${p[2]}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PARSING
+// ═══════════════════════════════════════════════════════════════
+function normalizeCNPJ(cnpj) {
+  return (cnpj || '').replace(/\D/g, '');
+}
+
+function lookupConta(cnpj) {
+  const norm = normalizeCNPJ(cnpj);
+  const found = params.find(p => normalizeCNPJ(p.cnpj) === norm);
+  return found ? found.conta : null;
+}
+
+function corrigirFornecedor(nome) {
+  if (!nome) return '';
+  const lastDash = nome.lastIndexOf('-');
+  let corrected = lastDash > 0 ? nome.substring(0, lastDash) : nome;
+  return corrected.replace(/,/g, '.').trim();
+}
+
+function parseDocumento(doc) {
+  if (!doc) return { docNum: '', parcStr: '', dcto: 'DCTO' };
+  const parts = doc.trim().split('-');
+  if (parts.length < 2) return { docNum: doc.trim(), parcStr: '', dcto: 'DCTO' + doc.trim() };
+  const docNum = parts[1];
+  let parcStr = '';
+  if (parts.length >= 3) {
+    const slashParts = parts[2].split('/');
+    if (slashParts.length >= 2) {
+      parcStr = `${slashParts[0]}/${slashParts[1]}`;
+    }
+  }
+  return { docNum, parcStr, dcto: 'DCTO' + docNum };
+}
+
+function parseValor(valor) {
+  if (!valor) return '0.00';
+  return valor.trim().replace(/\./g, '').replace(',', '.');
+}
+
+function formatValorBRL(str) {
+  const num = parseFloat(parseValor(str) || 0);
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BUILD TXT LINE
+// ═══════════════════════════════════════════════════════════════
+function buildLine(row, seq, lote) {
+  const seqStr = String(seq).padStart(6, '0');
+  const date = csvDateToTXT(row['PAGAMENTO']);
+  const conta = lookupConta(row['CNPJ/CPF']);
+  const debito = conta || '504';
+  const credito = '12289';
+  const valor = parseValor(row['VALOR PAGO']);
+  const { docNum, parcStr, dcto } = parseDocumento(row['DOCUMENTO']);
+  const fornecedor = corrigirFornecedor(row['FORNECEDOR']);
+  const cnpjSoNumeros = normalizeCNPJ(row['CNPJ/CPF']);
+
+  let complemento = 'Pagamento dpl n° ';
+  if (docNum) {
+    complemento += docNum;
+    if (parcStr) complemento += '-' + parcStr;
+  }
+  complemento += ' - ' + fornecedor;
+
+  // seq, data, debito, credito, valor, historico(vazio), complemento, DCTO, lote, cnpj
+  return [seqStr, date, debito, credito, valor, '', complemento, dcto, lote, cnpjSoNumeros].join(',');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROCESSAR / PREVIEW
+// ═══════════════════════════════════════════════════════════════
+function checkExportBtn() {
+  const lote = document.getElementById('loteInput').value.trim();
+  document.getElementById('btnExport').disabled = !(lote && filteredCount > 0);
+}
+
+function renderPreview() {
+  const filterDate = document.getElementById('filterDate').value;
+  const wrap = document.getElementById('previewWrap');
+  const statusBar = document.getElementById('statusBar');
+
+  if (!csvRows.length || !filterDate) {
+    wrap.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>${!csvRows.length ? 'Faça upload de um CSV.' : 'Selecione uma data.'}</p></div>`;
+    statusBar.style.display = 'none';
+    return;
+  }
+
+  const csvDate = inputDateToCSV(filterDate);
+  const filtered = csvRows.filter(r => r['PAGAMENTO'] === csvDate);
+
+  if (filtered.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Nenhum lançamento encontrado para ${csvDate}.</p></div>`;
+    statusBar.style.display = 'none';
+    filteredCount = 0;
+    document.getElementById('btnExport').disabled = true;
+    return;
+  }
+
+  let totalVal = 0;
+  let semParam = 0;
+  filtered.forEach(r => {
+    totalVal += parseFloat(parseValor(r['VALOR PAGO']) || 0);
+    if (!lookupConta(r['CNPJ/CPF'])) semParam++;
+  });
+
+  document.getElementById('statCount').textContent = filtered.length;
+  document.getElementById('statTotal').textContent = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  document.getElementById('statSemParam').textContent = semParam;
+  statusBar.style.display = 'flex';
+  filteredCount = filtered.length;
+  checkExportBtn();
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Data</th>
+        <th style="min-width:160px">CNPJ/CPF</th>
+        <th>Documento</th>
+        <th style="text-align:right">Valor Pago</th>
+        <th>Ct. Débito</th>
+        <th>Ct. Crédito</th>
+        <th>Complemento</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  filtered.forEach((r, i) => {
+    const seq = String(i + 1).padStart(6, '0');
+    const conta = lookupConta(r['CNPJ/CPF']);
+    const debito = conta || '504';
+    const { docNum, parcStr } = parseDocumento(r['DOCUMENTO']);
+    const fornecedor = corrigirFornecedor(r['FORNECEDOR']);
+    let complem = 'Pagamento dpl n° ';
+    if (docNum) { complem += docNum; if (parcStr) complem += '-' + parcStr; }
+    complem += ' - ' + fornecedor;
+
+    html += `<tr>
+      <td class="seq-num">${seq}</td>
+      <td class="mono-cell">${escHtml(formatDateDisplay(r['PAGAMENTO']))}</td>
+      <td class="mono-cell" style="min-width:160px">${escHtml(r['CNPJ/CPF'])}</td>
+      <td class="mono-cell">${escHtml(docNum)}${parcStr ? ' <span style="color:var(--text-soft)">'+escHtml(parcStr)+'</span>' : ''}</td>
+      <td class="mono-cell" style="text-align:right">${formatValorBRL(r['VALOR PAGO'])}</td>
+      <td><span class="${conta ? 'badge-ok' : 'badge-warn'}">${escHtml(debito)}</span></td>
+      <td><span class="badge-ok">12289</span></td>
+      <td class="complemento-cell">${escHtml(complem)}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════════
+function exportTXT() {
+  const filterDate = document.getElementById('filterDate').value;
+  const lote = document.getElementById('loteInput').value.trim();
+
+  if (!filterDate || !lote) return;
+
+  const csvDate = inputDateToCSV(filterDate);
+  const filtered = csvRows.filter(r => r['PAGAMENTO'] === csvDate);
+  if (!filtered.length) return;
+
+  const lines = filtered.map((r, i) => buildLine(r, i + 1, lote));
+  const content = lines.join('\r\n');
+
+  const [year, month, day] = filterDate.split('-');
+  const filename = `Pagamentos Schwanke ${day}${month}${year}.txt`;
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PARÂMETROS — STORAGE
+// ═══════════════════════════════════════════════════════════════
+const STORAGE_KEY = 'schwanke_params_v1';
+
+function loadParams() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    params = stored ? JSON.parse(stored) : DEFAULT_PARAMS.map(p => ({ ...p }));
+  } catch {
+    params = DEFAULT_PARAMS.map(p => ({ ...p }));
+  }
+}
+
+function saveParams() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(params));
+}
+
+function confirmReset() {
+  if (confirm('Restaurar a lista para os valores padrão? As alterações feitas serão perdidas.')) {
+    params = DEFAULT_PARAMS.map(p => ({ ...p }));
+    saveParams();
+    renderParams();
+    showMsg(document.getElementById('paramsMsg'), 'success', 'Parâmetros restaurados para o padrão.');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PARÂMETROS — RENDER
+// ═══════════════════════════════════════════════════════════════
+function renderParams() {
+  const tbody = document.getElementById('paramsTbody');
+  tbody.innerHTML = '';
+  params.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="num-col">${i + 1}</td>
+      <td><input class="param-input" value="${escHtml(p.cnpj)}" onchange="updateParam(${i},'cnpj',this.value)" onblur="saveParams()"></td>
+      <td><input class="param-input" value="${escHtml(p.conta)}" onchange="updateParam(${i},'conta',this.value)" onblur="saveParams()"></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeParam(${i})">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateParam(idx, field, value) {
+  params[idx][field] = value.trim();
+}
+
+function removeParam(idx) {
+  if (!confirm(`Remover parâmetro "${params[idx].cnpj}"?`)) return;
+  params.splice(idx, 1);
+  saveParams();
+  renderParams();
+}
+
+function addParam() {
+  const cnpj = document.getElementById('newCnpj').value.trim();
+  const conta = document.getElementById('newConta').value.trim();
+  const msgEl = document.getElementById('paramsMsg');
+
+  if (!cnpj || !conta) {
+    showMsg(msgEl, 'error', 'Preencha o CNPJ/CPF e a Conta Débito.');
+    return;
+  }
+
+  params.push({ cnpj, conta });
+  saveParams();
+  renderParams();
+
+  document.getElementById('newCnpj').value = '';
+  document.getElementById('newConta').value = '';
+  showMsg(msgEl, 'success', `Parâmetro ${params.length} adicionado.`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════════════
+function showMsg(el, type, text) {
+  el.className = 'msg ' + type;
+  el.textContent = text;
+  setTimeout(() => { el.className = 'msg'; }, 5000);
+}
+</script>
+</body>
+</html>
