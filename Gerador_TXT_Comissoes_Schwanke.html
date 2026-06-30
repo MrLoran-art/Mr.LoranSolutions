@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Gerador TXT Comissões - Schwanke</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --border:#2a2f3a;
+    --text:#e8eaf0; --muted:#8b93a7; --accent:#4f8cff; --accent2:#37c98a;
+    --warn:#e0a23b; --danger:#e0566a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg); color:var(--text); padding:32px 20px;
+  }
+  .wrap{max-width:980px; margin:0 auto;}
+  h1{font-size:21px; font-weight:600; margin:0 0 4px;}
+  .sub{color:var(--muted); font-size:13.5px; margin:0 0 28px;}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:24px; margin-bottom:20px;
+  }
+  .drop{
+    border:2px dashed var(--border); border-radius:10px; padding:36px 20px;
+    text-align:center; cursor:pointer; transition:.15s; background:var(--panel2);
+  }
+  .drop:hover, .drop.drag{ border-color:var(--accent); background:#1c2333; }
+  .drop p{margin:6px 0; color:var(--muted); font-size:13.5px;}
+  .drop strong{color:var(--text); font-size:15px;}
+  input[type=file]{display:none;}
+  .totals{display:flex; gap:14px; flex-wrap:wrap; margin-top:18px;}
+  .tile{
+    flex:1; min-width:160px; background:var(--panel2); border:1px solid var(--border);
+    border-radius:10px; padding:14px 16px;
+  }
+  .tile .lbl{font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;}
+  .tile .val{font-size:19px; font-weight:600; margin-top:4px;}
+  table{width:100%; border-collapse:collapse; font-size:13px; margin-top:18px;}
+  th{
+    text-align:left; padding:9px 10px; color:var(--muted); font-weight:500;
+    border-bottom:1px solid var(--border); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em;
+  }
+  td{padding:9px 10px; border-bottom:1px solid #20242e;}
+  tr:hover td{background:#1b1f29;}
+  .cnpj-input{
+    width:160px; background:#11141a; border:1px solid var(--border); color:var(--text);
+    padding:6px 8px; border-radius:6px; font-size:13px; font-family:inherit;
+  }
+  .cnpj-input.empty{border-color:var(--warn);}
+  .num{text-align:right; font-variant-numeric:tabular-nums;}
+  .name{max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .actions{display:flex; gap:10px; margin-top:20px; align-items:center; flex-wrap:wrap;}
+  button{
+    background:var(--accent); color:#fff; border:none; padding:11px 20px;
+    border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; transition:.15s;
+  }
+  button:hover{filter:brightness(1.08);}
+  button:disabled{background:#3a3f4b; cursor:not-allowed;}
+  button.secondary{background:var(--panel2); border:1px solid var(--border); color:var(--text);}
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:20px;
+    font-size:12px; font-weight:500;
+  }
+  .badge.warn{background:#3a2e1a; color:var(--warn);}
+  .badge.ok{background:#16332a; color:var(--accent2);}
+  .alert{
+    background:#2a2110; border:1px solid #4a3a1a; color:var(--warn);
+    padding:12px 16px; border-radius:8px; font-size:13.5px; margin-top:16px; display:none;
+  }
+  .alert.show{display:block;}
+  .footer-note{color:var(--muted); font-size:12px; margin-top:10px;}
+  .hidden{display:none;}
+  .spin{
+    width:16px; height:16px; border:2px solid #4a5160; border-top-color:var(--accent);
+    border-radius:50%; animation:spin .7s linear infinite; display:inline-block; vertical-align:middle;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gerador de TXT — Importação SCI (Comissões Schwanke)</h1>
+  <p class="sub">Anexo 39 — Demais documentos REG F100 EFD PIS/COFINS</p>
+
+  <div class="card">
+    <div id="drop" class="drop">
+      <p><strong>Clique ou arraste o relatório de comissões (PDF)</strong></p>
+      <p>O arquivo será processado localmente no seu navegador</p>
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf">
+    <div id="loading" class="hidden" style="margin-top:16px; text-align:center; color:var(--muted);">
+      <span class="spin"></span> Processando PDF...
+    </div>
+  </div>
+
+  <div id="resultCard" class="card hidden">
+    <div class="totals">
+      <div class="tile"><div class="lbl">Competência</div><div class="val" id="tCompetencia">—</div></div>
+      <div class="tile"><div class="lbl">Lançamentos</div><div class="val" id="tCount">0</div></div>
+      <div class="tile"><div class="lbl">Valor Contábil Total</div><div class="val" id="tValorContabil">R$ 0,00</div></div>
+      <div class="tile"><div class="lbl">IR Total</div><div class="val" id="tIR">R$ 0,00</div></div>
+      <div class="tile"><div class="lbl">Valor Líquido Total</div><div class="val" id="tLiquido">R$ 0,00</div></div>
+    </div>
+
+    <div id="cnpjAlert" class="alert">
+      ⚠ Há lançamentos sem CNPJ identificado. Os campos foram deixados em branco — preencha manualmente antes de gerar o arquivo (a importação no sistema permite ajustar apenas o CNPJ).
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>CNPJ</th>
+          <th>Representante</th>
+          <th class="num">Valor Bruto</th>
+          <th class="num">Desconto</th>
+          <th class="num">Acréscimo</th>
+          <th class="num">Valor Contábil</th>
+          <th class="num">IR</th>
+          <th class="num">Valor Líquido</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="actions">
+      <button id="genBtn">Gerar arquivo TXT</button>
+      <button class="secondary" id="resetBtn">Carregar outro relatório</button>
+      <span id="genStatus"></span>
+    </div>
+    <p class="footer-note">Layout: Tipo Doc 6 · Operação 1 · CST PIS/COFINS 70 · Natureza Base 03 · Cód. Receita IR 8045 · Nat. Rendimento IR 1138 · Conta Débito 2690 · Conta Crédito 508</p>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const dropEl = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const loadingEl = document.getElementById('loading');
+const resultCard = document.getElementById('resultCard');
+const tbody = document.getElementById('tbody');
+const cnpjAlert = document.getElementById('cnpjAlert');
+
+let records = [];
+let competenciaStr = ''; // ex 05/2026
+let dataLancamento = ''; // DDMMAAAA visual / ex 25/05/2026
+let dataLancamentoYMD = ''; // YYYYMMDD para campo 05 e 73
+
+dropEl.addEventListener('click', () => fileInput.click());
+dropEl.addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('drag'); });
+dropEl.addEventListener('dragleave', () => dropEl.classList.remove('drag'));
+dropEl.addEventListener('drop', e => {
+  e.preventDefault(); dropEl.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  records = [];
+  resultCard.classList.add('hidden');
+  fileInput.value = '';
+});
+
+function parseMoneyBR(str) {
+  if (!str) return 0;
+  return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+}
+
+function formatMoneyBR(num) {
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const CNPJ_RE = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/;
+
+async function handleFile(file) {
+  if (file.type !== 'application/pdf') { alert('Selecione um arquivo PDF.'); return; }
+  loadingEl.classList.remove('hidden');
+  resultCard.classList.add('hidden');
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+
+    let allLines = []; // [{y, items:[{x,text}]}]
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const viewport = page.getViewport({ scale: 1 });
+
+      const lineMap = new Map();
+      for (const item of content.items) {
+        if (!item.str || !item.str.trim()) continue;
+        // properly compose text matrix with viewport (handles page rotation correctly)
+        const m = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const x = m[4];
+        const y = m[5];
+        const key = Math.round(y / 2) * 2; // row tolerance
+        if (!lineMap.has(key)) lineMap.set(key, []);
+        lineMap.get(key).push({ x, text: item.str });
+      }
+      const sortedKeys = [...lineMap.keys()].sort((a, b) => a - b);
+      for (const k of sortedKeys) {
+        const items = lineMap.get(k).sort((a, b) => a.x - b.x);
+        allLines.push(items);
+      }
+
+      if (p === 1) {
+        const headerText = allLines.map(items => items.map(i => i.text).join(' ')).join(' ');
+        const m2 = headerText.match(/PER[ÍI]ODO\s+(\d{2}\/\d{2}\/\d{4})\s+AT[ÉE]\s+(\d{2}\/\d{2}\/\d{4})/i);
+        if (m2) {
+          dataLancamento = m2[2];
+          const [dd, mm, yyyy] = m2[2].split('/');
+          dataLancamentoYMD = `${yyyy}${mm}${dd}`;
+          competenciaStr = `${mm}/${yyyy}`;
+        }
+      }
+    }
+
+    const MONEY_FULL_RE = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$/;
+    // column x-ranges validated against the report layout (Valor Bruto / Desconto / Acréscimo / IR)
+    const COL = { vb: [385, 437], desc: [437, 480], acr: [480, 519], ir: [519, 568] };
+    const inRange = (x, r) => x >= r[0] && x < r[1];
+
+    const parsed = [];
+    for (const items of allLines) {
+      const lineText = items.map(i => i.text).join(' ');
+      if (/^\s*Total\b/i.test(lineText)) continue; // skip total row
+
+      const cnpjItem = items.find(i => CNPJ_RE.test(i.text));
+      if (!cnpjItem) continue;
+      const cnpjDigits = cnpjItem.text.match(CNPJ_RE)[0].replace(/\D/g, '');
+
+      let valorBruto = 0, desconto = 0, acrescimo = 0, ir = 0;
+      const nameParts = [];
+
+      for (const it of items) {
+        const t = it.text.trim();
+        if (!t || it === cnpjItem) continue;
+        if (MONEY_FULL_RE.test(t)) {
+          const val = parseMoneyBR(t);
+          if (inRange(it.x, COL.vb)) valorBruto = val;
+          else if (inRange(it.x, COL.desc)) desconto = val;
+          else if (inRange(it.x, COL.acr)) acrescimo = val;
+          else if (inRange(it.x, COL.ir)) ir = val;
+          // values beyond x>=568 (Valor Líquido, Outros, Adiantamento, Valor Final) are ignored
+        } else if (it.x > 80 && it.x < 380) {
+          nameParts.push(t);
+        }
+      }
+
+      if (valorBruto === 0 && desconto === 0 && acrescimo === 0 && ir === 0) continue; // not a data row
+
+      const nome = nameParts.join(' ').replace(/\s+/g, ' ').trim();
+      const valorContabil = valorBruto - desconto + acrescimo;
+      const valorLiquido = valorContabil - ir;
+
+      parsed.push({
+        cnpj: cnpjDigits,
+        nome,
+        valorBruto, desconto, acrescimo, ir,
+        valorContabil, valorLiquido
+      });
+    }
+
+    if (!parsed.length) {
+      alert('Não foi possível identificar lançamentos no PDF. Verifique o arquivo.');
+      loadingEl.classList.add('hidden');
+      return;
+    }
+
+    records = parsed;
+    renderTable();
+    resultCard.classList.remove('hidden');
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao processar o PDF: ' + err.message);
+  } finally {
+    loadingEl.classList.add('hidden');
+  }
+}
+
+function renderTable() {
+  tbody.innerHTML = '';
+  let totalContabil = 0, totalIR = 0, totalLiquido = 0;
+  let hasEmptyCnpj = false;
+
+  records.forEach((r, idx) => {
+    totalContabil += r.valorContabil;
+    totalIR += r.ir;
+    totalLiquido += r.valorLiquido;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="cnpj-input ${r.cnpj ? '' : 'empty'}" data-idx="${idx}" value="${r.cnpj}" maxlength="14" placeholder="14 dígitos"></td>
+      <td class="name" title="${r.nome}">${r.nome}</td>
+      <td class="num">${formatMoneyBR(r.valorBruto)}</td>
+      <td class="num">${formatMoneyBR(r.desconto)}</td>
+      <td class="num">${formatMoneyBR(r.acrescimo)}</td>
+      <td class="num">${formatMoneyBR(r.valorContabil)}</td>
+      <td class="num">${formatMoneyBR(r.ir)}</td>
+      <td class="num">${formatMoneyBR(r.valorLiquido)}</td>
+    `;
+    tbody.appendChild(tr);
+    if (!r.cnpj || r.cnpj.length !== 14) hasEmptyCnpj = true;
+  });
+
+  document.getElementById('tCompetencia').textContent = competenciaStr || '—';
+  document.getElementById('tCount').textContent = records.length;
+  document.getElementById('tValorContabil').textContent = 'R$ ' + formatMoneyBR(totalContabil);
+  document.getElementById('tIR').textContent = 'R$ ' + formatMoneyBR(totalIR);
+  document.getElementById('tLiquido').textContent = 'R$ ' + formatMoneyBR(totalLiquido);
+
+  cnpjAlert.classList.toggle('show', hasEmptyCnpj);
+
+  // bind cnpj input changes
+  tbody.querySelectorAll('.cnpj-input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const idx = +e.target.dataset.idx;
+      const digits = e.target.value.replace(/\D/g, '');
+      records[idx].cnpj = digits;
+      e.target.classList.toggle('empty', digits.length !== 14);
+      const stillEmpty = records.some(r => !r.cnpj || r.cnpj.length !== 14);
+      cnpjAlert.classList.toggle('show', stillEmpty);
+    });
+  });
+}
+
+function esc(str) {
+  return '"' + String(str).replace(/"/g, '') + '"';
+}
+
+function buildTxtLine(r, docNumber, mesAno) {
+  const f = [];
+  f.push('6');                                  // 01 Tipo Documento
+  f.push(esc('1'));                              // 02 Tipo Operação (indicador "0"/"1"/"2" como string)
+  f.push(esc(r.cnpj));                            // 03 CPF/CNPJ
+  f.push(esc(''));                                // 04 Produto
+  f.push(esc(dataLancamentoYMD));                 // 05 Data da operação
+  f.push(docNumber);                              // 06 Número do documento (mmaa)
+  f.push(esc('O'));                               // 07 Condição pagamento - Outras
+  f.push(r.valorContabil.toFixed(2));             // 08 Valor da operação
+  f.push(esc('2690'));                            // 09 Conta débito
+  f.push(esc('508'));                             // 10 Conta crédito
+  f.push(esc('70'));                              // 11 CST Pis
+  f.push((0).toFixed(2));                         // 12 Base Pis
+  f.push((0).toFixed(2));                         // 13 Alíquota Pis
+  f.push((0).toFixed(2));                         // 14 Valor Pis
+  f.push(esc('70'));                              // 15 CST Cofins
+  f.push((0).toFixed(2));                         // 16 Base Cofins
+  f.push((0).toFixed(2));                         // 17 Alíquota Cofins
+  f.push((0).toFixed(2));                         // 18 Valor Cofins
+  f.push(esc('03'));                              // 19 Natureza base de cálculo
+  f.push(0);                                      // 20 Origem do crédito
+  f.push(esc(`Comissões s/ Vendas ${r.nome} Ref. ${mesAno}`)); // 21 Descrição complementar
+  f.push(esc(''));                                // 22 Centro de custo
+  f.push((0).toFixed(2));                         // 23 Valor Pis retido
+  f.push(0);                                      // 24 Cód recolhimento Pis retido
+  f.push((0).toFixed(2));                         // 25 Valor Cofins retido
+  f.push(0);                                      // 26 Cód recolhimento Cofins retido
+  f.push((0).toFixed(2));                         // 27 Valor CSLL retido
+  f.push(0);                                      // 28 Cód recolhimento CSLL retido
+  f.push(0);                                      // 29 Indicador natureza retenção
+  f.push(esc(''));                                // 30 Inscrição estadual
+  f.push(esc(''));                                // 31 UF participante
+  f.push(esc(''));                                // 32 Natureza receita
+  f.push(esc(''));                                // 33 Tabela natureza receita
+  f.push(esc(''));                                // 34 Atividade CPRB
+  f.push(r.ir.toFixed(2));                        // 35 Valor IR retido
+  f.push(8045);                                   // 36 Código recolhimento IR
+  f.push((0).toFixed(2));                         // 37 Valor ISS retido
+  f.push(0);                                      // 38 Código recolhimento ISS
+  f.push((0).toFixed(2));                         // 39 Valor total bruto créditos Factoring
+  f.push((0).toFixed(2));                         // 40 Valor IOF Factoring
+  f.push((0).toFixed(2));                         // 41 Valor tarifas Factoring
+  f.push((0).toFixed(2));                         // 42 Valor líquido Factoring
+  f.push((0).toFixed(2));                         // 43 Outras deduções INSS
+  f.push((0).toFixed(2));                         // 44 % redução base INSS
+  f.push((0).toFixed(2));                         // 45 Valor materiais terceiros
+  f.push((0).toFixed(2));                         // 46 Valor subempreitadas
+  f.push(0);                                      // 47 Código recolhimento INSS
+  f.push(0);                                      // 48 Tipo de serviço
+  f.push((0).toFixed(2));                         // 49 Valor base cálculo INSS retida
+  f.push((0).toFixed(2));                         // 50 Valor materiais próprios
+  f.push(esc(''));                                // 51 Código participante
+  f.push(esc(''));                                // 52 Número contrato aluguel
+  f.push(r.valorContabil.toFixed(2));             // 53 Valor da Comissão
+  f.push(esc('2690'));                            // 54 Conta Sped
+  f.push(r.valorContabil.toFixed(2));             // 55 Base IR Retido
+  f.push((1.5).toFixed(2));                       // 56 Alíquota IR Retido
+  f.push((0).toFixed(2));                         // 57 Valor retenção não efetuada IR
+  f.push((0).toFixed(2));                         // 58 Base retenção não efetuada IR
+  f.push((0).toFixed(2));                         // 59 Valor depósito judicial IR
+  f.push(esc('1138'));                            // 60 Natureza rendimento IR
+  f.push((0).toFixed(2));                         // 61 Valor retenção não efetuada PIS
+  f.push((0).toFixed(2));                         // 62 Base retenção não efetuada PIS
+  f.push((0).toFixed(2));                         // 63 Valor depósito judicial PIS
+  f.push(esc(''));                                // 64 Natureza rendimento PIS
+  f.push((0).toFixed(2));                         // 65 Valor retenção não efetuada Cofins
+  f.push((0).toFixed(2));                         // 66 Base retenção não efetuada Cofins
+  f.push((0).toFixed(2));                         // 67 Valor depósito judicial Cofins
+  f.push(esc(''));                                // 68 Natureza rendimento Cofins
+  f.push((0).toFixed(2));                         // 69 Valor retenção não efetuada CSLL
+  f.push(esc(''));                                // 70 Natureza rendimento CSLL
+  f.push((0).toFixed(2));                         // 71 Base retenção não efetuada CSLL
+  f.push((0).toFixed(2));                         // 72 Valor depósito judicial CSLL
+  f.push(esc(dataLancamentoYMD));                 // 73 Competência REINF
+  f.push(0);                                      // 74 Processo PIS
+  f.push(0);                                      // 75 Processo COFINS
+  f.push(0);                                      // 76 Processo CSLL
+  f.push(0);                                      // 77 Processo IR
+  f.push(0);                                      // 78 Suspensão PIS
+  f.push(0);                                      // 79 Suspensão COFINS
+  f.push(0);                                      // 80 Suspensão CSLL
+  f.push(0);                                      // 81 Suspensão IR
+  f.push(esc(''));                                // 82 Data RPA
+
+  return f.join(',');
+}
+
+document.getElementById('genBtn').addEventListener('click', () => {
+  const statusEl = document.getElementById('genStatus');
+  const invalid = records.filter(r => !r.cnpj || r.cnpj.length !== 14);
+  if (invalid.length) {
+    if (!confirm(`${invalid.length} lançamento(s) com CNPJ ausente ou inválido. Deseja gerar mesmo assim?`)) return;
+  }
+
+  const [mes, ano] = competenciaStr.split('/');
+  const mesAno = `${mes}/${ano}`;
+  const docNumber = `${mes}${ano.slice(-2)}`; // mmaa ex 0526
+
+  const lines = records.map(r => buildTxtLine(r, docNumber, mesAno));
+  const content = lines.join('\r\n');
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fileName = `Comissões_Schwanke_${docNumber.length===4?docNumber:docNumber}`.replace('mmaa','') ;
+  a.href = url;
+  a.download = `Comissões_Schwanke_${mes}${ano}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  statusEl.innerHTML = '<span class="badge ok">✓ Arquivo gerado</span>';
+  setTimeout(() => statusEl.innerHTML = '', 4000);
+});
+</script>
+</body>
+</html>
