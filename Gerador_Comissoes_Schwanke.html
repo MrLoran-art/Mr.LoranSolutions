@@ -130,7 +130,7 @@
       <button class="secondary" id="resetBtn">Carregar outro relatório</button>
       <span id="genStatus"></span>
     </div>
-    <p class="footer-note">Layout: Tipo Doc 6 · Operação 1 · CST PIS/COFINS 70 · Natureza Base 03 · Cód. Receita IR 8045 · Nat. Rendimento IR 1138 · Conta Débito 2690 · Conta Crédito 508</p>
+    <p class="footer-note">Layout: Tipo Doc 6 · Operação 1 · CST PIS/COFINS 70 · Natureza Base 03 · Cód. Receita IR 8045 · Nat. Rendimento IR 1138 · </p>
   </div>
 </div>
 
@@ -343,8 +343,8 @@ function buildTxtLine(r, docNumber, mesAno) {
   f.push(docNumber);                              // 06 Número do documento (mmaa)
   f.push(esc('O'));                               // 07 Condição pagamento - Outras
   f.push(r.valorContabil.toFixed(2));             // 08 Valor da operação
-  f.push(esc('2690'));                            // 09 Conta débito
-  f.push(esc('508'));                             // 10 Conta crédito
+  f.push(esc(''));                            // 09 Conta débito
+  f.push(esc(''));                             // 10 Conta crédito
   f.push(esc('70'));                              // 11 CST Pis
   f.push((0).toFixed(2));                         // 12 Base Pis
   f.push((0).toFixed(2));                         // 13 Alíquota Pis
