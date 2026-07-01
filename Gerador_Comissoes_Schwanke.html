@@ -130,7 +130,7 @@
       <button class="secondary" id="resetBtn">Carregar outro relatório</button>
       <span id="genStatus"></span>
     </div>
-    <p class="footer-note">Layout: Tipo Doc 6 · Operação 1 · CST PIS/COFINS 70 · Natureza Base 03 · Cód. Receita IR 8045 · Nat. Rendimento IR 1138 · </p>
+    <p class="footer-note">Layout: Tipo Doc 6 · Operação 1 · CST PIS/COFINS 70 · Natureza Base 03 · Cód. Receita IR 8045 · Nat. Rendimento IR 1138 · Conta Débito 2690 · Conta Crédito 508</p>
   </div>
 </div>
 
@@ -343,8 +343,8 @@ function buildTxtLine(r, docNumber, mesAno) {
   f.push(docNumber);                              // 06 Número do documento (mmaa)
   f.push(esc('O'));                               // 07 Condição pagamento - Outras
   f.push(r.valorContabil.toFixed(2));             // 08 Valor da operação
-  f.push(esc(''));                            // 09 Conta débito
-  f.push(esc(''));                             // 10 Conta crédito
+  f.push(esc('2690'));                            // 09 Conta débito
+  f.push(esc('508'));                             // 10 Conta crédito
   f.push(esc('70'));                              // 11 CST Pis
   f.push((0).toFixed(2));                         // 12 Base Pis
   f.push((0).toFixed(2));                         // 13 Alíquota Pis
@@ -370,7 +370,7 @@ function buildTxtLine(r, docNumber, mesAno) {
   f.push(esc(''));                                // 33 Tabela natureza receita
   f.push(esc(''));                                // 34 Atividade CPRB
   f.push(r.ir.toFixed(2));                        // 35 Valor IR retido
-  f.push(8045);                                   // 36 Código recolhimento IR
+  f.push(r.ir > 0 ? 8045 : '');                   // 36 Código recolhimento IR
   f.push((0).toFixed(2));                         // 37 Valor ISS retido
   f.push(0);                                      // 38 Código recolhimento ISS
   f.push((0).toFixed(2));                         // 39 Valor total bruto créditos Factoring
@@ -389,8 +389,8 @@ function buildTxtLine(r, docNumber, mesAno) {
   f.push(esc(''));                                // 52 Número contrato aluguel
   f.push(r.valorContabil.toFixed(2));             // 53 Valor da Comissão
   f.push(esc('2690'));                            // 54 Conta Sped
-  f.push(r.valorContabil.toFixed(2));             // 55 Base IR Retido
-  f.push((1.5).toFixed(2));                       // 56 Alíquota IR Retido
+  f.push(r.ir > 0 ? r.valorContabil.toFixed(2) : (0).toFixed(2)); // 55 Base IR Retido
+  f.push(r.ir > 0 ? (1.5).toFixed(2) : (0).toFixed(2));           // 56 Alíquota IR Retido
   f.push((0).toFixed(2));                         // 57 Valor retenção não efetuada IR
   f.push((0).toFixed(2));                         // 58 Base retenção não efetuada IR
   f.push((0).toFixed(2));                         // 59 Valor depósito judicial IR
