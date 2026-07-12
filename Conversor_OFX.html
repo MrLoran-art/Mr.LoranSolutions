@@ -242,10 +242,10 @@ function mkTx(date, desc, amount) {
 */
 function parseItauBBA(lines) {
   const tx = []; let fail = 0;
-  const skipRe = /SALDO\s+(ANTERIOR|TOTAL\s+DISPONÍVEL|MOVIMENTAÇÃO|APLIC\.?\s*AUT\.?|DIA\b)|RENDIMENTOS REND PAGO|ITAU INFINIT|JR ACOES ITAU|^SAC\s|^Ouvidoria|^Em caso|^Fale com|^Reclamações/i;
+  const skipRe = /SALDO\s+(ANTERIOR|TOTAL\s+DISPONÍVEL|MOVIMENTAÇÃO|APLIC\.?\s*AUT\.?|DIA\b)|ITAU INFINIT|JR ACOES ITAU|^SAC\s|^Ouvidoria|^Em caso|^Fale com|^Reclamações/i;
 
   let lastDate = null;
-  let pendParts = [];  // accumulated text parts
+  let pendParts = [];  // accumulated text parts (pré-texto antes da linha de data)
 
   const commit = (date, parts) => {
     const text = parts.join(' ');
@@ -255,7 +255,7 @@ function parseItauBBA(lines) {
     const val = parseAmt(amts[amts.length - 1]);
     if (isNaN(val) || val === 0) { fail++; return; }
     const desc = text
-      .replace(dateFullRe, '')
+      .replace(/\d{2}\/\d{2}\/\d{4}/g, '')
       .replace(moneyRe(), '')
       .replace(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, '')
       .replace(/\d{3}\.\d{3}\.\d{3}-\d{2}/g, '')
@@ -265,15 +265,23 @@ function parseItauBBA(lines) {
     tx.push(mkTx(normDate(date), desc, val));
   };
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (skipRe.test(line)) { if (pendParts.length) { commit(lastDate, pendParts); pendParts=[]; } continue; }
     const dm = line.match(dateFullRe);
     if (dm) {
-      if (pendParts.length) { commit(lastDate, pendParts); pendParts = []; }
       lastDate = dm[1];
-      if ([...line.matchAll(moneyRe())].length >= 1) {
-        commit(lastDate, [line]);
+      const hasVal = [...line.matchAll(moneyRe())].length >= 1;
+      if (hasVal) {
+        // Funde pré-texto acumulado (se houver) com a linha de data+valor num único commit.
+        // Não há lookahead de pós-texto: a linha seguinte pode ser pré-texto da
+        // PRÓXIMA transação, e não há como distinguir isso de forma confiável
+        // sem coordenadas — melhor perder um sufixo curto do que corromper a
+        // transação vizinha.
+        commit(lastDate, [...pendParts, line]);
+        pendParts = [];
       } else {
+        if (pendParts.length) { commit(lastDate, pendParts); }
         pendParts = [line];
       }
     } else if (lastDate) {
@@ -520,7 +528,7 @@ function parseStone(lines, items) {
   const tx = [];
 
   // Linhas de cabeçalho/rodapé a ignorar
-  const skipRe = /^(Extrato de conta corrente|Emitido em|Página\s|Dados da conta|Nome\s+Documento|Instituição|Stone Institu|Período:|DATA\s+TIPO|Informações do Comprovante|Código da|Ouvidoria|Se nosso|úteis, das|ouvidoria@stone|CNPJ|Dúvidas|Regiões Metropol|meajuda@stone|\d{2}\.\d{3}\.\d{3}\/)/i;
+  const skipRe = /^(Extrato de conta corrente|Emitido em|Página\s|Dados da conta|Nome\s+Documento|Instituição|Stone Institu|Período:|DATA\s+TIPO|Informações do Comprovante|Código da|Ouvidoria|Se nosso|úteis, das|ouvidoria@stone|CNPJ|Dúvidas|Regiões Metropol|meajuda@stone|\d{2}\.\d{3}\.\d{3}\/|[0-9a-f]{8}\s+[0-9a-f]{4}\s+[0-9a-f]{4}-[0-9a-f]{4,}\s+[0-9a-f]{6,})/i;
 
   // Linha âncora: DD/MM/YY   Entrada|Saída   [inlineDesc]   [-] R$ VALOR
   const dateLineRe = /^(\d{2}\/\d{2}\/\d{2})\s+(Entrada|Sa[íi]da)\s*(.*?)\s*(-\s*R\$|R\$)\s*([\d.]+,\d{2})/i;
@@ -1025,13 +1033,26 @@ function parseNubank(lines) {
 
   for (const line of lines) {
     const dm=line.match(nuDate);
-    if(dm){flush();curDate=`${dm[1].padStart(2,'0')}/${MONTHS[dm[2].toUpperCase()]}/${dm[3]}`;curSign=0;pend=[];continue;}
+    if(dm){
+      flush();
+      curDate=`${dm[1].padStart(2,'0')}/${MONTHS[dm[2].toUpperCase()]}/${dm[3]}`;
+      // Data e "Total de entradas/saídas" podem vir fundidas na mesma linha
+      const rest = line.slice(dm[0].length).trim();
+      if (/Total de entradas/i.test(rest)) curSign = 1;
+      else if (/Total de sa[íi]das/i.test(rest)) curSign = -1;
+      else curSign = 0;
+      pend=[];
+      continue;
+    }
     if(entRe.test(line)){flush();curSign=1;pend=[];continue;}
     if(saiRe.test(line)){flush();curSign=-1;pend=[];continue;}
     if(saldoRe.test(line)){flush();curSign=0;pend=[];continue;}
     if(skipRe.test(line)||!curDate||curSign===0) continue;
     const t=line.trim(); if(!t) continue;
-    if(txStart.test(t)&&pend.length&&amtEnd.test(pend[pend.length-1])) flush();
+    // Sempre commita o pendente antes de iniciar uma nova transação,
+    // independente do conteúdo residual acumulado (evita contaminação por
+    // texto de rodapé que não foi filtrado pelo skipRe)
+    if(txStart.test(t)&&pend.length) flush();
     pend.push(t);
     if(amtEnd.test(t)) flush();
   }
@@ -1636,7 +1657,7 @@ function logMsg(msg,cls=''){
 function groupLines(items){
   const byY={};
   items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byY[y])byY[y]=[];byY[y].push(it.str);});
-  return Object.keys(byY).sort((a,b)=>b-a).map(y=>byY[y].join(' ').trim()).filter(l=>l);
+  return Object.keys(byY).sort((a,b)=>b-a).map(y=>byY[y].join(' ').trim().normalize('NFC')).filter(l=>l);
 }
 
 async function processSpreadsheet(file) {
