@@ -336,15 +336,15 @@ function esc(str) {
 function buildTxtLine(r, docNumber, mesAno) {
   const f = [];
   f.push('6');                                  // 01 Tipo Documento
-  f.push(esc('1'));                              // 02 Tipo Operação (indicador "0"/"1"/"2" como string)
+  f.push(esc('0'));                              // 02 Tipo Operação (indicador "0"/"1"/"2" como string)
   f.push(esc(r.cnpj));                            // 03 CPF/CNPJ
   f.push(esc(''));                                // 04 Produto
   f.push(esc(dataLancamentoYMD));                 // 05 Data da operação
   f.push(docNumber);                              // 06 Número do documento (mmaa)
-  f.push(esc('O'));                               // 07 Condição pagamento - Outras
+  f.push(esc('P'));                               // 07 Condição pagamento 
   f.push(r.valorContabil.toFixed(2));             // 08 Valor da operação
-  f.push(esc('2690'));                            // 09 Conta débito
-  f.push(esc('508'));                             // 10 Conta crédito
+  f.push(esc(''));                            // 09 Conta débito
+  f.push(esc(''));                             // 10 Conta crédito
   f.push(esc('70'));                              // 11 CST Pis
   f.push((0).toFixed(2));                         // 12 Base Pis
   f.push((0).toFixed(2));                         // 13 Alíquota Pis
