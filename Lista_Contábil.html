@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Empresas Unificado</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --blue-dark: #1F4E78;
+    --blue-header: #9DC3E6;
+    --blue-light: #D9E8F5;
+    --blue-bg: #EFF6FC;
+    --missing: #FFF2CC;
+    --border: #C9C9C9;
+    --text: #23343F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    background: var(--blue-bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0;
+    color: var(--blue-dark);
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #5A6B75;
+    margin-top: 4px;
+  }
+  #downloadBtn {
+    background: var(--blue-dark);
+    color: #fff;
+    border: none;
+    padding: 12px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(31,78,120,0.25);
+    transition: background 0.15s ease, transform 0.1s ease;
+    white-space: nowrap;
+  }
+  #downloadBtn:hover { background: #163B5C; transform: translateY(-1px); }
+  #downloadBtn:active { transform: translateY(0); }
+  #downloadBtn svg { width: 16px; height: 16px; }
+
+  /* ---- Filtro de busca ---- */
+  .search-wrap {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .search-wrap label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--blue-dark);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  #searchInput {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    color: var(--text);
+  }
+  #searchInput:focus {
+    border-color: var(--blue-dark);
+    box-shadow: 0 0 0 2px rgba(31,78,120,0.15);
+  }
+  #searchResults {
+    margin-top: 10px;
+  }
+  .result-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 7px;
+    background: var(--blue-bg);
+    border: 1px solid var(--blue-light);
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .result-row .info { display: flex; flex-direction: column; gap: 2px; }
+  .result-row .empresa { font-weight: 600; color: var(--text); }
+  .result-row .meta { font-size: 12px; color: #5A6B75; }
+  .result-row .responsavel {
+    background: var(--blue-dark);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .no-results {
+    font-size: 13px;
+    color: #5A6B75;
+    padding: 6px 2px;
+  }
+
+  /* ---- Quadros ---- */
+  .board-wrap {
+    overflow-x: auto;
+    padding-bottom: 14px;
+    /* barra de rolagem horizontal sempre visivel e facil de arrastar */
+    scrollbar-width: auto;
+  }
+  .board-wrap::-webkit-scrollbar {
+    height: 14px;
+  }
+  .board-wrap::-webkit-scrollbar-track {
+    background: var(--blue-light);
+    border-radius: 8px;
+  }
+  .board-wrap::-webkit-scrollbar-thumb {
+    background: var(--blue-header);
+    border-radius: 8px;
+    border: 2px solid var(--blue-light);
+  }
+  .board-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--blue-dark);
+  }
+  .board {
+    display: flex;
+    gap: 18px;
+    width: max-content;
+  }
+  .col {
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    width: 420px;
+    flex: 0 0 420px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border: 1px solid var(--border);
+  }
+  .col-header {
+    background: var(--blue-header);
+    color: var(--blue-dark);
+    font-weight: 700;
+    font-size: 15px;
+    text-align: center;
+    padding: 12px 10px;
+    letter-spacing: 0.5px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    white-space: nowrap;
+  }
+  thead th.center { text-align: center; }
+  tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #EEF2F5;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+  tbody td.center { text-align: center; }
+  tbody tr:nth-child(even) { background: #FAFCFE; }
+  td.missing { background: var(--missing) !important; }
+  .table-scroll {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .legend {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #5A6B75;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend span.swatch {
+    width: 12px; height: 12px; background: var(--missing);
+    display: inline-block; border-radius: 2px; border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Empresas por Responsável</h1>
+    <div class="subtitle">CNPJ e enquadramento federal consolidados a partir da consulta cadastral</div>
+  </div>
+  <button id="downloadBtn" onclick="baixarPlanilha()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    Baixar Planilha
+  </button>
+</div>
+
+<div class="search-wrap">
+  <label for="searchInput">Buscar por nome da empresa ou CNPJ</label>
+  <input type="text" id="searchInput" placeholder="Ex: Casa Afeto  ou  38.489.052/0001-46" oninput="handleSearch()">
+  <div id="searchResults"></div>
+</div>
+
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+</div>
+
+<div class="legend"><span class="swatch"></span> Empresa não localizada na consulta (CNPJ/enquadramento em branco)</div>
+
+<script>
+const DATA = {"Aline": [{"empresa": "Bbs Medicina - Bruna Sabbagh Servicos Medicos Ltda", "cnpj": "64.603.935/0001-45", "enquadramento": "ME"}, {"empresa": "Bosan Importacao E Comercio Eletronico Ltda", "cnpj": "37.297.226/0001-06", "enquadramento": "ME"}, {"empresa": "Casa Afeto Servicos De Saude Ltda", "cnpj": "38.489.052/0001-46", "enquadramento": "ME"}, {"empresa": "Certblu Servico De Infraestrutura E Nuvem Ltda", "cnpj": "28.206.604/0001-08", "enquadramento": "ME"}, {"empresa": "Clinica Aphra Ltda", "cnpj": "29.973.048/0001-68", "enquadramento": "Normal"}, {"empresa": "Daluna Conexoes E Negogios Ltda", "cnpj": "73.238.164/0001-25", "enquadramento": "Normal"}, {"empresa": "Elo Import Importadora Ltda", "cnpj": "18.407.094/0001-83", "enquadramento": "ME"}, {"empresa": "Ewald & Stoeberl Advogados Associados", "cnpj": "02.000.153/0001-64", "enquadramento": "ME"}, {"empresa": "Femme Saude Da Mulher Ltda", "cnpj": "45.564.934/0001-94", "enquadramento": "Normal"}, {"empresa": "Gastroclinic Servicos Medicos Ltda", "cnpj": "27.130.415/0001-36", "enquadramento": "Normal"}, {"empresa": "Hmb Comercio E Representacoes De Produtos E Equipamentos De Limpeza E De Epis Ltda", "cnpj": "22.122.522/0001-07", "enquadramento": "ME"}, {"empresa": "Hope Gestao Imobiliaria Ltda", "cnpj": "45.655.833/0001-29", "enquadramento": "ME"}, {"empresa": "Infoway Comercio E Solucoes Em Informatica Ltda", "cnpj": "11.205.320/0001-02", "enquadramento": "ME"}, {"empresa": "Jalimar Deschamps", "cnpj": "17.882.318/0001-46", "enquadramento": "ME"}, {"empresa": "Jc Assessoria Esportiva Ltda", "cnpj": "43.968.252/0001-11", "enquadramento": "ME"}, {"empresa": "Ke Comercio De Decoracao Ltda", "cnpj": "30.057.584/0001-00", "enquadramento": "ME"}, {"empresa": "Mecanica Manos Diesel Ltda", "cnpj": "47.016.619/0001-58", "enquadramento": "ME"}, {"empresa": "Menj Decoracoes Ltda", "cnpj": "04.400.878/0001-75", "enquadramento": "Normal"}, {"empresa": "Multicartas Servicos De Redacao E Editoracao Ltda", "cnpj": "73.843.997/0001-15", "enquadramento": "ME"}, {"empresa": "Nt Textil Industrializacao Ltda", "cnpj": "37.313.047/0001-15", "enquadramento": "ME"}, {"empresa": "Nuwell - Excelencia Medica Ltda", "cnpj": "63.290.663/0001-08", "enquadramento": "ME"}, {"empresa": "Pulsee Solucoes Ltda", "cnpj": "43.253.127/0001-25", "enquadramento": "ME"}, {"empresa": "Rioyoga Textil Ltda", "cnpj": "24.515.286/0001-06", "enquadramento": "ME"}, {"empresa": "Sevem Sport", "cnpj": "", "enquadramento": ""}, {"empresa": "Sdi Comercio De Decoracao De Interiores Ltda", "cnpj": "03.286.066/0001-88", "enquadramento": "EPP"}, {"empresa": "Sidnei Joao Da Silva Ltda", "cnpj": "04.097.972/0001-05", "enquadramento": "ME"}, {"empresa": "Textil Guerreiro Ltda", "cnpj": "25.269.163/0001-03", "enquadramento": "Normal"}, {"empresa": "Toffol Producoes Ltda", "cnpj": "19.395.719/0001-05", "enquadramento": "ME"}, {"empresa": "Tramiti Industria E Comercio De Confeccoes Ltda", "cnpj": "02.698.878/0001-78", "enquadramento": "ME"}, {"empresa": "Thais Alice Rocha Farias De Lima", "cnpj": "40.570.867/0001-05", "enquadramento": "ME"}, {"empresa": "Valeska Barbosa Pasquini De Oliveira", "cnpj": "26.562.859/0001-88", "enquadramento": "ME"}, {"empresa": "Vintage Heart Joias E Decor Ltda", "cnpj": "62.957.415/0001-05", "enquadramento": "ME"}, {"empresa": "Vitor Viana Servicos Ltda", "cnpj": "42.825.248/0001-31", "enquadramento": "Normal"}, {"empresa": "Wzonta Confeccoes Ltda", "cnpj": "28.961.791/0001-35", "enquadramento": "ME"}, {"empresa": "Nutricionista Andrea Kauder Ltda", "cnpj": "65.413.337/0001-76", "enquadramento": "ME"}, {"empresa": "Caio De Caro Servicos Medicos Ltda", "cnpj": "65.628.954/0001-99", "enquadramento": "ME"}, {"empresa": "Eletronasa Servicos Ltda", "cnpj": "26.800.091/0001-33", "enquadramento": "ME"}, {"empresa": "Tdi Promocao De Vendas Ltda", "cnpj": "65.711.824/0001-15", "enquadramento": "ME"}, {"empresa": "Walkyria Aparecida Goncalves Cazallas Servicos Ltda", "cnpj": "65.977.808/0001-79", "enquadramento": "ME"}, {"empresa": "Mentoria Mm Treinamentos Ltda", "cnpj": "66.142.918/0001-83", "enquadramento": "ME"}, {"empresa": "Maicon De Souza - Sem Movimento", "cnpj": "", "enquadramento": ""}, {"empresa": "Ffelix Instrumentacao Ltda", "cnpj": "60.524.757/0001-06", "enquadramento": "ME"}, {"empresa": "Construimthurn Servicos Ltda", "cnpj": "16.936.257/0001-90", "enquadramento": "ME"}, {"empresa": "J Venturi Comunicacao Ltda", "cnpj": "42.988.496/0001-01", "enquadramento": "ME"}, {"empresa": "Imperio Lola Semi Joias Folheadas A Prata E Ouro Ltda", "cnpj": "37.968.551/0001-53", "enquadramento": "ME"}, {"empresa": "Axion Ti Servicos Ltda", "cnpj": "43.018.579/0001-22", "enquadramento": "ME"}, {"empresa": "J.m. Dedetizacao Ltda", "cnpj": "00.293.309/0001-17", "enquadramento": "ME"}, {"empresa": "Prisma Investimentos Ltda", "cnpj": "44.163.879/0001-68", "enquadramento": "ME"}, {"empresa": "Prisma Textil E Servicos Ltda", "cnpj": "10.751.404/0001-70", "enquadramento": "ME"}, {"empresa": "Outtime Desenvolvimento Imobiliario Ltda", "cnpj": "62.071.457/0001-44", "enquadramento": "ME"}, {"empresa": "Odontologia Igutti Ltda", "cnpj": "36.046.610/0001-73", "enquadramento": "ME"}, {"empresa": "Biocardio Hsc Ltda", "cnpj": "00.084.255/0001-80", "enquadramento": "EPP"}, {"empresa": "Jalimar Deschamps", "cnpj": "17.882.318/0001-46", "enquadramento": "ME"}, {"empresa": "Casas Engenharia Ltda", "cnpj": "55.511.159/0001-62", "enquadramento": "ME"}, {"empresa": "Claudete Florencio Jochem Servicos Ltda", "cnpj": "55.477.130/0001-01", "enquadramento": "ME"}, {"empresa": "Ludicos Cvv Entretenimento Ltda", "cnpj": "23.559.018/0001-23", "enquadramento": "ME"}, {"empresa": "Clinica Campanella Ltda", "cnpj": "05.098.647/0001-11", "enquadramento": "ME"}, {"empresa": "Conecta.com Telecomunicacoes E Informatica Ltda", "cnpj": "18.177.266/0001-70", "enquadramento": "ME"}, {"empresa": "Feldmann Comercio Ltda", "cnpj": "45.381.466/0001-12", "enquadramento": "ME"}, {"empresa": "Schmitt Engenharia Ltda", "cnpj": "60.539.070/0001-44", "enquadramento": "ME"}, {"empresa": "Nutricionista Andrea Kauder Ltda", "cnpj": "65.413.337/0001-76", "enquadramento": "ME"}, {"empresa": "Fonoconecta Treinamentos E Servicos Ltda", "cnpj": "45.324.590/0001-46", "enquadramento": "ME"}, {"empresa": "Aroma Do Reino Ltda", "cnpj": "13.441.921/0001-31", "enquadramento": "ME"}], "Blanda": [{"empresa": "A2me Tecnologia Educacional Ltda", "cnpj": "51.496.630/0001-30", "enquadramento": "ME"}, {"empresa": "Ad Express Servicos Ltda", "cnpj": "47.298.647/0001-05", "enquadramento": "ME"}, {"empresa": "Aline Buerger Pediatria Ltda", "cnpj": "42.601.480/0001-96", "enquadramento": "ME"}, {"empresa": "Aluga Container Odorizzi Ltda", "cnpj": "50.411.670/0001-79", "enquadramento": "ME"}, {"empresa": "Ana Paula Enfermagem Obstetrica Ltda", "cnpj": "48.253.863/0001-05", "enquadramento": "ME"}, {"empresa": "Ana Pfiffer Muniz Servicos Medicos Ltda", "cnpj": "53.708.584/0001-10", "enquadramento": "ME"}, {"empresa": "Ana Philipps Treinamento E Consultoria", "cnpj": "", "enquadramento": ""}, {"empresa": "Analise Em Foco Espaco Publicitario Ltda", "cnpj": "11.149.779/0001-28", "enquadramento": "ME"}, {"empresa": "Andre Germano Vieira Da Silva", "cnpj": "23.437.384/0001-00", "enquadramento": "ME"}, {"empresa": "Annexo Software Brasil Ltda", "cnpj": "49.182.367/0001-62", "enquadramento": "Normal"}, {"empresa": "Antonio Urbano Filho Servicos Ltda", "cnpj": "54.285.617/0001-20", "enquadramento": "ME"}, {"empresa": "Ar Condicionado Comercio De Eletrodomesticos E Assistencia Tecnica Ltda", "cnpj": "06.283.975/0001-50", "enquadramento": "ME"}, {"empresa": "Arte Do Corte Talharia Ltda", "cnpj": "58.290.795/0001-08", "enquadramento": "ME"}, {"empresa": "Astrotek Distribuidora Ltda", "cnpj": "04.466.717/0001-84", "enquadramento": "Normal"}, {"empresa": "Audmed Prime Servicos Ltda", "cnpj": "54.610.366/0001-01", "enquadramento": "ME"}, {"empresa": "Beevy Tecnologia Comunicacao E Entretenimento Ltda", "cnpj": "55.070.959/0001-95", "enquadramento": "ME"}, {"empresa": "Bemtelili Comercio De Produtos Para Saude & Bem-Estar Ltda", "cnpj": "09.250.139/0001-68", "enquadramento": "Normal"}, {"empresa": "Bianfios Representacoes Comerciais Ltda", "cnpj": "06.107.978/0001-33", "enquadramento": "ME"}, {"empresa": "Blutop Comercio E Servicos Para Construcao Civil Ltda", "cnpj": "05.036.748/0001-68", "enquadramento": "Normal"}, {"empresa": "Blutraining Cursos E Consultoria Ltda", "cnpj": "42.108.689/0001-12", "enquadramento": "ME"}, {"empresa": "Broza & Del Castillo Associados Ltda", "cnpj": "", "enquadramento": ""}, {"empresa": "Campestrini Sociedade Individual De Advocacia", "cnpj": "28.536.286/0001-43", "enquadramento": "ME"}, {"empresa": "Centro Educacional Saberes Do Amanha Ltda", "cnpj": "20.083.601/0001-12", "enquadramento": "ME"}, {"empresa": "Centro Hipico E Comercial Santa Rita Ltda", "cnpj": "09.452.448/0001-10", "enquadramento": "ME"}, {"empresa": "Clt Treinamentos Ltda", "cnpj": "62.451.642/0001-64", "enquadramento": "ME"}, {"empresa": "Conta8 Solucoes Financeiras Ltda", "cnpj": "49.744.184/0001-93", "enquadramento": "ME"}, {"empresa": "Egm Engenharia Ambiental Ltda", "cnpj": "18.670.709/0001-60", "enquadramento": "Normal"}, {"empresa": "Etx Representacoes Ltda", "cnpj": "15.210.251/0001-78", "enquadramento": "ME"}, {"empresa": "Faturamed Participacoes Societarias Ltda", "cnpj": "63.422.962/0001-59", "enquadramento": "Normal"}, {"empresa": "Fibraforro Comercio De Forros Ltda", "cnpj": "10.947.029/0001-39", "enquadramento": "Normal"}, {"empresa": "Foltran Dba - Servicos Em Banco De Dados Ltda", "cnpj": "37.683.379/0001-91", "enquadramento": "ME"}, {"empresa": "Fvr Textil E Servicos Ltda", "cnpj": "12.286.090/0001-08", "enquadramento": "ME"}, {"empresa": "G-Martec Engenharia E Construcao Ltda", "cnpj": "26.628.506/0001-33", "enquadramento": "Normal"}, {"empresa": "Gabriela Yamada Lopes Trigo", "cnpj": "22.998.562/0001-09", "enquadramento": "ME"}, {"empresa": "Gspk Servicos Medicos Ltda", "cnpj": "40.108.790/0001-48", "enquadramento": "ME"}, {"empresa": "Gusato Cardoso Adm Ltda", "cnpj": "52.505.977/0001-64", "enquadramento": "Normal"}, {"empresa": "I'nov9 Servicos Ltda", "cnpj": "36.377.168/0001-68", "enquadramento": "Normal"}, {"empresa": "John Carlos Simon", "cnpj": "52.110.316/0001-30", "enquadramento": "ME"}, {"empresa": "Jrc Consultoria E Assessoria Digital Ltda", "cnpj": "17.744.411/0001-94", "enquadramento": "Normal"}, {"empresa": "K1 Gestao Inteligente Ltda", "cnpj": "52.241.245/0001-04", "enquadramento": "ME"}, {"empresa": "Karina Roberta Silva Buss Ltda", "cnpj": "40.998.195/0001-25", "enquadramento": "ME"}, {"empresa": "Lalice Modas E Acessorios Ltda", "cnpj": "50.117.740/0001-80", "enquadramento": "ME"}, {"empresa": "Laser Fix Ltda", "cnpj": "26.645.178/0001-83", "enquadramento": "ME"}, {"empresa": "Latnibras Comercio De Medicamentos E Instrumentos Ltda", "cnpj": "33.597.686/0001-07", "enquadramento": "ME"}, {"empresa": "Lb Funilaria Ltda", "cnpj": "43.211.823/0001-79", "enquadramento": "ME"}, {"empresa": "Letex Comercio Atacadista Ltda", "cnpj": "18.003.686/0001-30", "enquadramento": "ME"}, {"empresa": "Lidera Gestao Condominial Ltda", "cnpj": "55.440.751/0001-10", "enquadramento": "ME"}, {"empresa": "Logtech Solutions E Servicos Ltda", "cnpj": "49.618.769/0001-67", "enquadramento": "ME"}, {"empresa": "Lopes Morila Comunicacao Ltda", "cnpj": "97.421.424/0001-61", "enquadramento": "ME"}, {"empresa": "Lsi Intermediacoes Ltda", "cnpj": "50.453.071/0001-18", "enquadramento": "ME"}, {"empresa": "Luckmann Arquitetura S/s", "cnpj": "48.131.083/0001-84", "enquadramento": "ME"}, {"empresa": "Luiz Antonio Dos Santos Servicos Ltda", "cnpj": "22.959.499/0001-00", "enquadramento": "ME"}, {"empresa": "Luiz Augusto Bruns Goncalves Servicos Ltda", "cnpj": "46.854.566/0001-81", "enquadramento": "ME"}, {"empresa": "Mafe Confeccoes Ltda", "cnpj": "47.259.100/0001-09", "enquadramento": "ME"}, {"empresa": "Mamute Solucoes Industriais Ltda", "cnpj": "37.133.457/0001-84", "enquadramento": "ME"}, {"empresa": "Marcia De Castilhos", "cnpj": "40.995.610/0001-97", "enquadramento": "ME"}, {"empresa": "Mazotto Jr Servicos Ltda", "cnpj": "48.544.197/0001-56", "enquadramento": "Normal"}, {"empresa": "Meta Investimentos E Negocios Imobiliarios Ltda", "cnpj": "60.457.879/0001-27", "enquadramento": "ME"}, {"empresa": "Mg Global Servicos Ltda", "cnpj": "21.324.762/0001-13", "enquadramento": "ME"}, {"empresa": "Musiclin Escola De Musica Ltda", "cnpj": "11.066.155/0001-47", "enquadramento": "ME"}, {"empresa": "N. Marinho Marketing Ltda", "cnpj": "03.802.084/0001-75", "enquadramento": "ME"}, {"empresa": "Neckel Eletrodomestico Ltda", "cnpj": "82.172.578/0001-90", "enquadramento": "ME"}, {"empresa": "Neri De Morais", "cnpj": "29.685.232/0001-02", "enquadramento": "ME"}, {"empresa": "New Life Saude Integrada Ltda", "cnpj": "40.988.441/0001-68", "enquadramento": "ME"}, {"empresa": "Nexxus Sistemas Ltda", "cnpj": "63.747.484/0001-57", "enquadramento": "Normal"}, {"empresa": "Nildo Representacoes Comerciais Ltda", "cnpj": "82.170.002/0001-93", "enquadramento": "ME"}, {"empresa": "Nm Viagens De Moda Ltda", "cnpj": "60.779.596/0001-00", "enquadramento": "ME"}, {"empresa": "O2l Dados Ltda", "cnpj": "31.321.796/0001-08", "enquadramento": "ME"}, {"empresa": "Ora Medicina Ltda", "cnpj": "60.399.709/0001-33", "enquadramento": "ME"}, {"empresa": "Pamplona Ortopedia E Traumatologia Ltda", "cnpj": "02.796.578/0001-21", "enquadramento": "ME"}, {"empresa": "Patricia Teixeira", "cnpj": "10.432.411/0001-00", "enquadramento": "ME"}, {"empresa": "Pizzaria E Lanchonete Algacir Eidt Ltda", "cnpj": "16.807.443/0001-29", "enquadramento": "ME"}, {"empresa": "Rcc Coworking Ltda", "cnpj": "56.993.566/0001-16", "enquadramento": "Normal"}, {"empresa": "Restaurante Staloch Ltda", "cnpj": "03.330.558/0001-23", "enquadramento": "ME"}, {"empresa": "Rm Academia E Assessoria Esportiva Ltda", "cnpj": "10.470.291/0001-35", "enquadramento": "ME"}, {"empresa": "Roberto & Rubens Bertoto Terraplenagem Ltda", "cnpj": "17.645.274/0001-30", "enquadramento": "ME"}, {"empresa": "Rt Promocao De Vendas Ltda", "cnpj": "10.216.245/0001-04", "enquadramento": "ME"}, {"empresa": "Skytex Importacao Ltda", "cnpj": "39.357.334/0001-52", "enquadramento": "ME"}, {"empresa": "Soft Design Informatica Ltda", "cnpj": "05.432.831/0001-56", "enquadramento": "ME"}, {"empresa": "Sool Comercio E Representacoes Ltda", "cnpj": "80.720.329/0001-66", "enquadramento": "EPP"}, {"empresa": "Starlex Engenharia E Treinamentos Ltda", "cnpj": "43.669.184/0001-90", "enquadramento": "ME"}, {"empresa": "Texapex Qualidade E Treinamento Ltda", "cnpj": "26.524.633/0001-92", "enquadramento": "ME"}, {"empresa": "Tft Fit Balance Comercio, Servicos E Consultoria Ltda", "cnpj": "18.804.265/0001-08", "enquadramento": "ME"}, {"empresa": "Thamara Correa Estetica E Bem Estar Ltda", "cnpj": "22.511.544/0001-50", "enquadramento": "ME"}, {"empresa": "Trans Decor Industria Textil Ltda", "cnpj": "25.267.506/0001-92", "enquadramento": "ME"}, {"empresa": "Rkn Transportes E Servicos Ltda", "cnpj": "74.129.834/0001-38", "enquadramento": "Normal"}, {"empresa": "Transpose Tecnologia E Inovacao Ltda", "cnpj": "53.881.119/0001-87", "enquadramento": "ME"}, {"empresa": "Trinse Softwares E Treinamentos Ltda", "cnpj": "63.711.797/0001-55", "enquadramento": "Normal"}, {"empresa": "Trinse Softwares E Treinamentos Ltda", "cnpj": "63.711.797/0001-55", "enquadramento": "Normal"}, {"empresa": "Vamar Representacoes Ltda", "cnpj": "79.004.644/0001-08", "enquadramento": "Normal"}, {"empresa": "Vb Tec Fabricacao Ltda", "cnpj": "23.361.957/0001-69", "enquadramento": "ME"}, {"empresa": "Sanzon Ajardinamentos Ltda", "cnpj": "82.146.184/0001-67", "enquadramento": "ME"}, {"empresa": "Virtus Consultoria E Treinamentos Ltda", "cnpj": "43.902.490/0001-24", "enquadramento": "ME"}, {"empresa": "Visual Merchandising Promocoes E Eventos Ltda", "cnpj": "11.406.491/0001-91", "enquadramento": "Normal"}, {"empresa": "Vpm Administradora De Bens Ltda", "cnpj": "50.436.994/0001-61", "enquadramento": "Normal"}, {"empresa": "Vrg Administradora De Bens Ltda", "cnpj": "62.960.283/0001-70", "enquadramento": "Normal"}, {"empresa": "Wa Marketing Promocional Ltda", "cnpj": "54.788.287/0001-95", "enquadramento": "Normal"}, {"empresa": "Wedablu Incorporacao E Assessoria Imobiliaria Ltda", "cnpj": "81.856.684/0001-20", "enquadramento": "ME"}, {"empresa": "Escola Yellow Tree Celestin Freinet Ltda", "cnpj": "07.481.578/0001-56", "enquadramento": "ME"}, {"empresa": "Z&s Design Studio Ltda", "cnpj": "29.872.129/0001-71", "enquadramento": "ME"}, {"empresa": "Radiadores Blumenau Ltda", "cnpj": "00.996.260/0001-69", "enquadramento": "Normal"}, {"empresa": "L.a Otorrinos Ltda", "cnpj": "27.965.726/0001-15", "enquadramento": "Normal"}, {"empresa": "Rhino Clinica Indaial Ltda", "cnpj": "51.857.980/0001-84", "enquadramento": "Normal"}, {"empresa": "M. M. Silva & Cia", "cnpj": "47.636.500/0001-88", "enquadramento": "Normal"}, {"empresa": "Cbcc Holding Ltda", "cnpj": "65.262.533/0001-97", "enquadramento": "Normal"}, {"empresa": "Robson & Adriana Holding Ltda", "cnpj": "66.552.674/0001-07", "enquadramento": "Normal"}, {"empresa": "Naconecy Holding Ltda", "cnpj": "66.588.160/0001-01", "enquadramento": "Normal"}, {"empresa": "Asaf - Associacao De Apoio A Familia", "cnpj": "", "enquadramento": ""}, {"empresa": "Giobeth Administradora De Bens Ltda", "cnpj": "52.222.806/0001-28", "enquadramento": "Normal"}], "Cintia": [{"empresa": "2eom Administradora Ltda", "cnpj": "41.644.768/0001-85", "enquadramento": "LP"}, {"empresa": "Arco Iris Industria Comercio Importacao E Exportacao Ltda", "cnpj": "00.134.977/0001-00", "enquadramento": "ME"}, {"empresa": "Bernart & Filhos Administradora De Bens Ltda", "cnpj": "09.351.718/0001-05", "enquadramento": "Normal"}, {"empresa": "Beta Administracao E Participacoes Ltda", "cnpj": "78.861.309/0001-63", "enquadramento": "Normal"}, {"empresa": "Big Administradora De Bens Ltda", "cnpj": "84.042.993/0001-54", "enquadramento": "Normal"}, {"empresa": "Bluimpex Distribuidora Importacao E Exportacao Ltda", "cnpj": "03.523.322/0001-03", "enquadramento": "Normal"}, {"empresa": "Construcoes E Servicos Je Ltda", "cnpj": "43.812.651/0001-99", "enquadramento": "ME"}, {"empresa": "Carlos Gomes Odontologia Ltda", "cnpj": "07.294.318/0001-71", "enquadramento": "ME"}, {"empresa": "Carlos Eduardo Taube Ltda", "cnpj": "11.478.834/0001-23", "enquadramento": "ME"}, {"empresa": "Centro Medico Catarinense De Cirurgia Plastica Ltda", "cnpj": "51.979.515/0001-16", "enquadramento": "Normal"}, {"empresa": "Centroplac Sistemas Construtivos Ltda", "cnpj": "09.226.001/0001-23", "enquadramento": "Normal"}, {"empresa": "Clinica Da Plastica Transgender Center Brazil Ltda", "cnpj": "06.928.786/0001-98", "enquadramento": "Normal"}, {"empresa": "Clinica Otoblu Ltda", "cnpj": "01.428.137/0001-04", "enquadramento": "Normal"}, {"empresa": "Concretizar Empreendimentos Imobiliarios Ltda", "cnpj": "54.887.984/0001-01", "enquadramento": "Normal"}, {"empresa": "Contnews Servicos Ltda", "cnpj": "17.957.981/0001-62", "enquadramento": "Normal"}, {"empresa": "Dapper Sociedade Individual De Advocacia", "cnpj": "42.590.955/0001-96", "enquadramento": "ME"}, {"empresa": "Dmu", "cnpj": "", "enquadramento": "SN"}, {"empresa": "Drw Drywall Ltda", "cnpj": "54.501.558/0001-80", "enquadramento": "ME"}, {"empresa": "Dryobra Construcao A Seco Ltda", "cnpj": "53.935.331/0001-80", "enquadramento": "ME"}, {"empresa": "Empreiteira Mck Ltda", "cnpj": "37.764.656/0001-90", "enquadramento": "ME"}, {"empresa": "Esteticcar Servicos Automotivos Ltda", "cnpj": "48.953.752/0001-01", "enquadramento": "Normal"}, {"empresa": "Eu.calipto Madeiras Tratadas Ltda", "cnpj": "26.627.923/0001-61", "enquadramento": "Normal"}, {"empresa": "Fm Construções (casa Suspensa) - Inativa", "cnpj": "", "enquadramento": "LP"}, {"empresa": "Fran Administradora De Bens Ltda", "cnpj": "07.399.921/0001-18", "enquadramento": "Normal"}, {"empresa": "Frm Negocios E Participacoes Ltda", "cnpj": "42.263.650/0001-70", "enquadramento": "Normal"}, {"empresa": "Futura Selecao Administradora Ltda", "cnpj": "58.376.630/0001-45", "enquadramento": "Normal"}, {"empresa": "Gruta Bom Sucesso Moradas Da Serra Ltda", "cnpj": "60.926.428/0001-91", "enquadramento": "ME"}, {"empresa": "H28 Investimentos Ltda", "cnpj": "08.969.447/0002-66", "enquadramento": "Normal"}, {"empresa": "Habitalar Empreendimentos Imobiliarios Ltda", "cnpj": "10.501.538/0001-33", "enquadramento": "Normal"}, {"empresa": "Hadaward Administradora De Bens Ltda", "cnpj": "57.245.838/0001-62", "enquadramento": "Normal"}, {"empresa": "Hammer Construtora Ltda", "cnpj": "38.413.436/0001-85", "enquadramento": "Normal"}, {"empresa": "Lorena Jorge Jacopeti Sanchez", "cnpj": "058.125.199-78", "enquadramento": "Normal"}, {"empresa": "Jispar Participacoes Ltda", "cnpj": "57.834.271/0001-60", "enquadramento": "Normal"}, {"empresa": "Jj Trading Mentoria Ltda", "cnpj": "07.523.999/0001-00", "enquadramento": "ME"}, {"empresa": "Jk Saude Ltda", "cnpj": "14.007.472/0001-80", "enquadramento": "Normal"}, {"empresa": "Juliano Construtora E Administradora De Bens Ltda", "cnpj": "15.395.565/0001-92", "enquadramento": "Normal"}, {"empresa": "Kinas Empreendimentos Imobiliarios Ltda", "cnpj": "51.114.081/0001-91", "enquadramento": "Normal"}, {"empresa": "Leroy Empreendimentos E Incorporadora Ltda", "cnpj": "30.897.743/0001-77", "enquadramento": "Normal"}, {"empresa": "Nhoffifa Administradora De Bens Ltda", "cnpj": "62.451.014/0001-89", "enquadramento": "Normal"}, {"empresa": "Vlnv Odontologia Ltda", "cnpj": "41.355.495/0001-59", "enquadramento": "ME"}, {"empresa": "Ortolano Turismo Rural Ltda", "cnpj": "48.479.824/0001-12", "enquadramento": "Normal"}, {"empresa": "Presto Florestal E Incorporacoes Ltda", "cnpj": "73.401.424/0001-31", "enquadramento": "Normal"}, {"empresa": "Probst Administradora De Bens Ltda", "cnpj": "34.397.188/0001-75", "enquadramento": "Normal"}, {"empresa": "Ps Empreendimentos Imobiliarios Ltda", "cnpj": "12.692.179/0001-74", "enquadramento": "Normal"}, {"empresa": "Pventuri Empreendimentos Imobiliarios Ltda", "cnpj": "39.233.996/0001-10", "enquadramento": "Normal"}, {"empresa": "Palma Incorporadora Ltda", "cnpj": "64.611.165/0001-82", "enquadramento": "Normal"}, {"empresa": "Rss Holding Ltda", "cnpj": "61.962.055/0001-77", "enquadramento": "Normal"}, {"empresa": "Rspw Holding Ltda", "cnpj": "64.097.980/0001-75", "enquadramento": "Normal"}, {"empresa": "Rkn Transportes E Servicos Ltda", "cnpj": "74.129.834/0001-38", "enquadramento": "Normal"}, {"empresa": "Rosso Participacoes Ltda", "cnpj": "83.643.486/0001-03", "enquadramento": "Normal"}, {"empresa": "Roy Empreendimentos Imobiliarios", "cnpj": "57.632.871/0001-45", "enquadramento": "Normal"}, {"empresa": "Sana Incorporacoes Ltda", "cnpj": "57.881.848/0001-94", "enquadramento": "Normal"}, {"empresa": "Santa Catarina Informatica Ltda", "cnpj": "82.923.160/0001-77", "enquadramento": "Normal"}, {"empresa": "Sirius Empreendimentos Imobiliarios Ltda", "cnpj": "56.320.055/0001-33", "enquadramento": "Normal"}, {"empresa": "Steel Consulting Comercio Ltda", "cnpj": "31.364.971/0001-44", "enquadramento": "Normal"}], "Paola": [{"empresa": "M7 Construtora Ltda", "cnpj": "10.939.057/0001-04", "enquadramento": "Normal"}, {"empresa": "Empreiteira Mck Ltda", "cnpj": "37.764.656/0001-90", "enquadramento": "ME"}, {"empresa": "Mio Empreendimento Imobiliario Ltda", "cnpj": "20.849.274/0001-67", "enquadramento": "Normal"}, {"empresa": "Portus Empreendimentos Imobiliarios Ltda", "cnpj": "08.688.940/0001-27", "enquadramento": "Normal"}, {"empresa": "Mepra Empreendimentos E Negocios Imobiliarios Ltda", "cnpj": "43.855.468/0001-70", "enquadramento": "Normal"}, {"empresa": "Mepra Negociacoes Imobiliarias Ltda", "cnpj": "45.651.173/0001-08", "enquadramento": "ME"}, {"empresa": "Odontologia Videira Ltda", "cnpj": "16.890.582/0001-69", "enquadramento": "Normal"}, {"empresa": "Clinica Dentaria Cia Do Sorriso Ltda", "cnpj": "08.644.836/0001-30", "enquadramento": "Normal"}, {"empresa": "Cp Coworking Ltda", "cnpj": "48.291.912/0001-96", "enquadramento": "ME"}, {"empresa": "Centro Park Estacionamento Ltda", "cnpj": "38.375.289/0002-87", "enquadramento": "Normal"}, {"empresa": "City Park Estacionamentos Ltda", "cnpj": "07.539.973/0014-67", "enquadramento": "ME"}, {"empresa": "Jbg Sourcing Importacao, Exportacao E Representacoes Ltda", "cnpj": "09.466.377/0001-05", "enquadramento": "Normal"}, {"empresa": "Jbra Administradora De Bens Ltda", "cnpj": "51.616.938/0001-71", "enquadramento": "Normal"}, {"empresa": "J. Hess Confeccao Ltda", "cnpj": "35.650.123/0001-52", "enquadramento": "ME"}, {"empresa": "Otorhinvs Blumenau Ltda", "cnpj": "14.761.055/0001-29", "enquadramento": "Normal"}, {"empresa": "Chiston Representacoes Comerciais Ltda", "cnpj": "28.770.786/0001-45", "enquadramento": "Normal"}, {"empresa": "Clinica Ewald Ltda", "cnpj": "03.957.132/0003-66", "enquadramento": "Normal"}, {"empresa": "Clinica Angiologica Schlup S/s", "cnpj": "01.428.139/0001-01", "enquadramento": "Normal"}, {"empresa": "Alm Servicos Odontologicos Ltda", "cnpj": "52.322.783/0001-23", "enquadramento": "Normal"}, {"empresa": "Otoderma Ltda", "cnpj": "27.570.686/0001-02", "enquadramento": "Normal"}, {"empresa": "Five Bln - 880", "cnpj": "", "enquadramento": "LP"}, {"empresa": "Five Star Odontologia Itajai Ltda", "cnpj": "40.005.840/0001-61", "enquadramento": "Normal"}, {"empresa": "A.t.b. Representacoes Ltda", "cnpj": "15.412.270/0001-87", "enquadramento": "Normal"}, {"empresa": "Evm Comercio De Automoveis Ltda", "cnpj": "55.422.837/0001-10", "enquadramento": "Normal"}, {"empresa": "Alm Servicos Odontologicos Ltda", "cnpj": "52.322.783/0001-23", "enquadramento": "Normal"}, {"empresa": "Acr Participacoes E Administradora De Bens Ltda", "cnpj": "07.602.333/0001-30", "enquadramento": "Normal"}, {"empresa": "Hhs Administradora Ltda", "cnpj": "43.257.785/0001-95", "enquadramento": "Normal"}, {"empresa": "M.bailer Administradora De Bens Ltda", "cnpj": "07.821.676/0001-95", "enquadramento": "Normal"}, {"empresa": "Jj Participacoes Ltda", "cnpj": "43.163.299/0001-08", "enquadramento": "Normal"}, {"empresa": "Qqc Administradora De Bens Ltda", "cnpj": "18.497.173/0001-22", "enquadramento": "Normal"}, {"empresa": "Caligra Administradora De Bens Ltda", "cnpj": "65.119.896/0001-78", "enquadramento": "Normal"}, {"empresa": "Prize Treinamentos Gerenciais Ltda", "cnpj": "07.041.928/0001-63", "enquadramento": "Normal"}, {"empresa": "Associacao Dos Servidores Do Legislativo De Blumenau", "cnpj": "05.814.150/0001-52", "enquadramento": "Normal"}, {"empresa": "Associacao Pro-Handebol De Blumenau", "cnpj": "01.568.702/0001-39", "enquadramento": "Normal"}, {"empresa": "Jc&ds Cafeteria E Chocolataria Ltda", "cnpj": "32.710.171/0001-09", "enquadramento": "Normal"}, {"empresa": "Db Soccer Ltda", "cnpj": "22.527.554/0001-84", "enquadramento": "Normal"}, {"empresa": "Dercide De Freitas Alvarez", "cnpj": "81.391.930/0001-15", "enquadramento": "Normal"}, {"empresa": "Clinica De Coloproctologia Dra. Jakeline Gules Ltda", "cnpj": "02.860.232/0001-45", "enquadramento": "Normal"}, {"empresa": "J&c Consultoria E Servicos De Inspecoes De Equipamentos Ltda", "cnpj": "16.748.864/0001-26", "enquadramento": "Normal"}, {"empresa": "Intacta Servicos Administrativos Ltda", "cnpj": "29.527.665/0001-30", "enquadramento": "ME"}, {"empresa": "J A Servicos Odontologicos Ltda", "cnpj": "05.152.569/0001-96", "enquadramento": "ME"}, {"empresa": "Hub300 Digital Ltda - Willian Wolff Lopes", "cnpj": "", "enquadramento": "SN"}, {"empresa": "Imperclean Comercio E Servicos Para Construcao Civil Ltda", "cnpj": "07.539.980/0001-44", "enquadramento": "Normal"}, {"empresa": "Infinity Representacoes Comerciais Ltda", "cnpj": "15.412.258/0001-72", "enquadramento": "Normal"}, {"empresa": "Rfb2 Administradora De Bens Ltda", "cnpj": "59.298.385/0001-68", "enquadramento": "Normal"}, {"empresa": "Rfb Servicos Administrativos Ltda", "cnpj": "57.773.527/0001-76", "enquadramento": "ME"}, {"empresa": "Hostie Stay Ltda", "cnpj": "62.511.505/0001-78", "enquadramento": "ME"}, {"empresa": "Hermes Servicos Administrativos Ltda", "cnpj": "63.592.061/0001-05", "enquadramento": "ME"}, {"empresa": "Atelier De Bordados Rejane Ltda", "cnpj": "04.459.503/0001-80", "enquadramento": "ME"}, {"empresa": "Focus Treinamentos Gerenciais Ltda", "cnpj": "45.164.026/0001-03", "enquadramento": "EPP"}, {"empresa": "Ds Servicos Ltda", "cnpj": "49.480.709/0001-20", "enquadramento": "ME"}, {"empresa": "E Mara Moda & Acessorios Ltda", "cnpj": "10.923.451/0001-54", "enquadramento": "ME"}]};
+const ORDER = ["Aline","Blanda","Cintia","Paola"];
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  ORDER.forEach(pessoa => {
+    const lst = DATA[pessoa] || [];
+    const col = document.createElement('div');
+    col.className = 'col';
+
+    const header = document.createElement('div');
+    header.className = 'col-header';
+    header.textContent = pessoa.toUpperCase() + ' (' + lst.length + ')';
+    col.appendChild(header);
+
+    const scrollWrap = document.createElement('div');
+    scrollWrap.className = 'table-scroll';
+
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>Empresa</th><th class="center">CNPJ</th><th class="center">Enquadramento</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    lst.forEach(item => {
+      const tr = document.createElement('tr');
+      const missing = !item.cnpj;
+      tr.innerHTML =
+        '<td>' + escapeHtml(item.empresa) + '</td>' +
+        '<td class="center' + (missing ? ' missing' : '') + '">' + escapeHtml(item.cnpj || '') + '</td>' +
+        '<td class="center' + (missing ? ' missing' : '') + '">' + escapeHtml(item.enquadramento || '') + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    scrollWrap.appendChild(table);
+    col.appendChild(scrollWrap);
+    board.appendChild(col);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function normalizeDigits(s) {
+  return String(s).replace(/\D/g, '');
+}
+
+function handleSearch() {
+  const raw = document.getElementById('searchInput').value.trim();
+  const resultsDiv = document.getElementById('searchResults');
+  resultsDiv.innerHTML = '';
+  if (!raw) return;
+
+  const term = raw.toLowerCase();
+  const termDigits = normalizeDigits(raw);
+  const isCnpjSearch = termDigits.length >= 4;
+
+  const matches = [];
+  ORDER.forEach(pessoa => {
+    (DATA[pessoa] || []).forEach(item => {
+      const nomeMatch = item.empresa.toLowerCase().includes(term);
+      const cnpjMatch = isCnpjSearch && item.cnpj && normalizeDigits(item.cnpj).includes(termDigits);
+      if (nomeMatch || cnpjMatch) {
+        matches.push({ ...item, responsavel: pessoa });
+      }
+    });
+  });
+
+  if (matches.length === 0) {
+    resultsDiv.innerHTML = '<div class="no-results">Nenhuma empresa encontrada.</div>';
+    return;
+  }
+
+  matches.slice(0, 30).forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML =
+      '<div class="info">' +
+        '<span class="empresa">' + escapeHtml(m.empresa) + '</span>' +
+        '<span class="meta">' + escapeHtml(m.cnpj || 'CNPJ não localizado') + (m.enquadramento ? ' · ' + escapeHtml(m.enquadramento) : '') + '</span>' +
+      '</div>' +
+      '<span class="responsavel">' + escapeHtml(m.responsavel) + '</span>';
+    resultsDiv.appendChild(row);
+  });
+
+  if (matches.length > 30) {
+    const more = document.createElement('div');
+    more.className = 'no-results';
+    more.textContent = '+ ' + (matches.length - 30) + ' resultado(s) adicional(is). Refine a busca.';
+    resultsDiv.appendChild(more);
+  }
+}
+
+function baixarPlanilha() {
+  const wb = XLSX.utils.book_new();
+  const wsData = [];
+  const blockWidth = 3;
+  const gap = 1;
+  const maxRows = Math.max(...ORDER.map(p => (DATA[p] || []).length)) + 2;
+
+  for (let r = 0; r < maxRows; r++) {
+    wsData.push(new Array(ORDER.length * (blockWidth + gap)).fill(''));
+  }
+
+  ORDER.forEach((pessoa, idx) => {
+    const lst = DATA[pessoa] || [];
+    const colStart = idx * (blockWidth + gap);
+    wsData[0][colStart] = pessoa.toUpperCase();
+    wsData[1][colStart] = 'Empresa';
+    wsData[1][colStart + 1] = 'CNPJ';
+    wsData[1][colStart + 2] = 'Enquadramento Federal';
+    lst.forEach((item, i) => {
+      wsData[2 + i][colStart] = item.empresa;
+      wsData[2 + i][colStart + 1] = item.cnpj;
+      wsData[2 + i][colStart + 2] = item.enquadramento;
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  ws['!merges'] = ORDER.map((_, idx) => {
+    const colStart = idx * (blockWidth + gap);
+    return { s: { r: 0, c: colStart }, e: { r: 0, c: colStart + 2 } };
+  });
+
+  const cols = [];
+  ORDER.forEach(() => {
+    cols.push({ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 3 });
+  });
+  ws['!cols'] = cols;
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Empresas');
+  XLSX.writeFile(wb, 'Empresas_Unificado.xlsx');
+}
+
+renderBoard();
+</script>
+
+</body>
+</html>
