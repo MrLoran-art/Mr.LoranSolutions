@@ -198,6 +198,7 @@ const BANKS = {
   bradesco:  { name: 'Bradesco',                code: '237' },
   c6bank:    { name: 'C6 Bank',                 code: '336' },
   caixa:     { name: 'Caixa Econômica Federal', code: '104' },
+  cora:      { name: 'Cora',                   code: '403' },
   daycoval:  { name: 'Daycoval',                code: '707' },
   inter:     { name: 'Banco Inter',             code: '077' },
   itau_bba:  { name: 'Itaú BBA',                code: '341' },
@@ -570,7 +571,8 @@ function parseStone(lines, items) {
    Layout 2 (especial): texto puro, valor + sufixo C|D, datas DD/MM/YY
 */
 function parseViaCredi(items, lines) {
-  // Detecta Layout 2: linhas com padrão "----" ou "HISTORICO LIBER DOCUMENTO"
+  if (lines.some(l => /Emitido em:/i.test(l))) return parseViaCreditL3(lines);
+  if (lines.some(l => /Emitido em\s+\d/i.test(l))) return parseViaCreditL4(lines);
   const isL2 = lines.some(l => /^-{4,}/.test(l) || /HISTORICO\s+LIBER\s+DOCUMENTO/i.test(l) || /EXTRATO\s+ESPECIAL/i.test(l));
   return isL2 ? parseViaCreditL2(lines) : parseViaCreditL1(items);
 }
@@ -661,6 +663,71 @@ function parseViaCreditL2(lines) {
     const desc = rawDesc.replace(/\s+[\d.]+\s*$/, '').trim().slice(0, 80) || 'Transação';
     const val = parseAmt(m[3]) * (m[4] === 'D' ? -1 : 1);
     if (isNaN(val) || val === 0) { fail++; continue; }
+    tx.push(mkTx(date, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Viacredi Layout 3 — novo layout Ailos
+   Colunas: Data | Lançamentos | Valor em R$ | Saldo em R$
+   Detectado por "Emitido em:" (com dois-pontos)
+*/
+function parseViaCreditL3(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^SALDO\s+ANTERIOR|^TOTAL\s+DE|^Data\s+Lançamentos|^Emitido|^CONTA|^Período|^Agência|^Extrato\s*$/i;
+  const monRe = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
+  let prevSaldo = NaN;
+
+  for (const line of lines) {
+    const t = line.trim();
+    const sm = t.match(/SALDO\s+ANTERIOR.*?(-?\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i);
+    if (sm) { prevSaldo = parseAmt(sm[1]); continue; }
+  }
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || skip.test(t)) continue;
+    const dm = t.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.*)/);
+    if (!dm) continue;
+    const date = dm[1];
+    const rest = dm[2];
+    const amounts = [...rest.matchAll(monRe)];
+    if (amounts.length < 2) { fail++; continue; }
+    const saldo = parseAmt(amounts[amounts.length - 1][0]);
+    let   val   = parseAmt(amounts[amounts.length - 2][0]);
+    if (!isNaN(prevSaldo)) val = saldo >= prevSaldo ? val : -val;
+    prevSaldo = saldo;
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    const firstAmtIdx = rest.search(/\d{1,3}(?:\.\d{3})*,\d{2}/);
+    const desc = (firstAmtIdx > 0 ? rest.slice(0, firstAmtIdx) : rest).replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
+    tx.push(mkTx(date, desc, val));
+  }
+  return { transactions:tx, failures:fail };
+}
+
+/* Viacredi Layout 4 — layout antigo com coluna DOCUMENTO
+   Detectado por "Emitido em" seguido de dígito (sem dois-pontos)
+   Sinal já embutido no valor (LANÇAMENTOS)
+*/
+function parseViaCreditL4(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^SALDO\s+ANTERIOR|^TOTAL|^DATA\s+|^Emitido|^CONTA|^Período|^Agência|^Extrato\s*$|^DOCUMENTO/i;
+  const signedMonRe = /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || skip.test(t)) continue;
+    const dm = t.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.*)/);
+    if (!dm) continue;
+    const date = dm[1];
+    const rest = dm[2];
+    const amounts = [...rest.matchAll(signedMonRe)];
+    if (amounts.length < 2) { fail++; continue; }
+    const val = parseAmt(amounts[amounts.length - 2][0]);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    const firstAmtIdx = rest.search(/-?\d{1,3}(?:\.\d{3})*,\d{2}/);
+    const rawDesc = firstAmtIdx > 0 ? rest.slice(0, firstAmtIdx) : '';
+    const desc = rawDesc.replace(/(\s+[\d:.\/]+)+\s*$/, '').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
     tx.push(mkTx(date, desc, val));
   }
   return { transactions:tx, failures:fail };
@@ -1131,108 +1198,119 @@ function parseSicredi(lines) {
   return { transactions:tx, failures:fail };
 }
 
-/* Unicred
-   Linha: DD/MM/YYYY DESCRIÇÃO ( Doc.: DOCINFO ) [-] R$ VALOR R$ SALDO
-   Pode ser multilinha: abre em ( Doc.: e fecha em ) antes do R$
+/* Unicred — formato DATA MOV. | ID. DOC | HISTÓRICO | LANÇAMENTOS | SALDO
+   Sinal já embutido no LANÇAMENTOS (positivo=crédito, negativo=débito).
+   Trata quebras de linha: normaliza "- dígito" → "-dígito" antes de extrair valores.
 */
 function parseUnicred(lines) {
   const tx = []; let fail = 0;
-  const skip = /^Saldo em \d|^Saldo no final|^Lançamentos futuros|^Saldo atual|^Total disponível|^Saldo bloqueado|^Limite de|^IOF|^Juros|^Tarifas|^CENTRAL DE|^Período de|^Solicitado|^Data\s+Lançamentos|CENTRAL DE RELACIONAMENTO|^\d+\/\d+\s*$|^0800\s|Lançamentos\s+Saldo|^Extrato\s*$/i;
-  let pend = null;
-  let descBuf = ''; // buffer para linha de descrição que aparece antes da linha de data+valores
+  const skip = /^DATA\s+MOV|^ID\.\s*DOC|^Saldo\s+em\s+\d|^Saldo\s+no\s+final|^Saldo\s+[Ff]inal|^Saldo\s+anterior|^Saldo\s+atual|^Saldo\s+em\s+conta|^Total\s+de\s+[cdCD]|^Total\s+disponível|^Saldo\s+bloqueado|^Limite\s+de|^CENTRAL\s+DE|^Período\s|^Solicitado|Lançamentos\s+futuros|^\d+\/\d+\s*$|^0800\s|^Extrato\s*$|^CONTA:|^Ag[eê]ncia|^Unicred\b|^Central\s+de\s+Relacionamento/i;
+  const monRe = () => /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
 
-  const commit = (date, text) => {
-    const docIdx = text.indexOf('( Doc.:');
-    const beforeDoc = docIdx >= 0 ? text.slice(0, docIdx) : text;
-    const afterDoc  = docIdx >= 0 ? text.slice(docIdx) : text;
-    const desc = beforeDoc.replace(/\s+/g,' ').trim();
-    const amRe = /(-\s*R\$|R\$)\s*([\d.]+,\d{2})/g;
-    const amts = [...afterDoc.matchAll(amRe)];
-    if (!amts.length) { fail++; return; }
-    // Prefere o primeiro valor negativo (débito); fallback: último positivo
-    // Corrige stream-order: saldo aparece antes do valor no stream do PDF Unicred
-    const negAmt = amts.find(m => m[1].includes('-'));
-    const chosen = negAmt || amts[amts.length - 1];
-    const isNeg = chosen[1].includes('-');
-    const val = parseAmt(chosen[2]) * (isNeg ? -1 : 1);
-    if (isNaN(val)||val===0) { fail++; return; }
-    tx.push(mkTx(normDate(date), desc.slice(0,80)||'Transação', val));
-  };
-
-  // isComplete: aceita ) antes de R$ (normal) OU R$ antes de ) (stream-order invertido)
-  const isComplete = t =>
-    /\)\s*-?\s*R\$/.test(t) ||
-    (t.includes('( Doc.:') && t.includes('R$') && /R\$[\s\S]*\)/.test(t)) ||
-    (t.includes('R$') && !t.includes('( Doc.:'));
-
-  for (const line of lines) {
-    if (skip.test(line.trim())) { if (pend) { fail++; pend=null; } descBuf=''; continue; }
-    const dm = line.match(dateFullRe);
-    if (dm) {
-      if (pend) { fail++; pend=null; }
-      // Prepende descrição bufferizada à linha de data+valores
-      const rest = (descBuf ? descBuf + ' ' : '') + line.replace(dateFullRe,'').trim();
-      descBuf = '';
-      if (isComplete(rest)) {
-        commit(dm[1], rest);
-      } else {
-        pend = { date:dm[1], text:rest };
-      }
-    } else if (pend) {
-      pend.text += ' '+line.trim();
-      if (isComplete(pend.text)) {
-        commit(pend.date, pend.text);
-        pend=null;
-      }
-    } else if (!moneyRe().test(line) && line.trim()) {
-      // Linha sem R$ e sem data: bufferiza como descrição para a próxima data
-      descBuf = descBuf ? descBuf + ' ' + line.trim() : line.trim();
-    }
-  }
-  if (pend) commit(pend.date, pend.text);
-  return { transactions:tx, failures:fail };
-}
-
-/* Asaas
-   Linha: DD/MM/YYYY DESCRIÇÃO R$ VALOR  (positivo = crédito, negativo = débito)
-*/
-function parseAsaas(lines) {
-  const tx = []; let fail = 0;
-  const skip = /Saldo inicial|Saldo final|^Data\s+Movimentações|Extrato gerado|^Período\s+\d/i;
-  let pend = null;
-
-  const commit = (date, text) => {
-    const rsIdx = text.search(/R\$/);
-    if (rsIdx < 0) { fail++; return; }
-    const amRe = /R\$\s*(-?\s*[\d.]+,\d{2})/;
-    const am = text.slice(rsIdx).match(amRe);
-    if (!am) { fail++; return; }
-    const val = parseAmt(am[1]);
-    if (isNaN(val)||val===0) { fail++; return; }
-    const desc = text.slice(0, rsIdx).replace(/\s+/g,' ').trim().slice(0,80)||'Transação';
+  const commit = (date, body) => {
+    const b = body.replace(/- (\d)/g, '-$1');
+    const ams = [...b.matchAll(monRe())];
+    if (ams.length < 2) { fail++; return; }
+    const val = parseAmt(ams[ams.length - 2][0]);
+    if (isNaN(val) || val === 0) { fail++; return; }
+    const firstAmtIdx = b.search(/-?\d{1,3}(?:\.\d{3})*,\d{2}/);
+    const rawDesc = (firstAmtIdx > 0 ? b.slice(0, firstAmtIdx) : b).replace(/\s+/g,' ').trim();
+    const desc = rawDesc.replace(/^\S+\s*/, '').replace(/\s+/g,' ').trim().slice(0,80) || 'Transação';
     tx.push(mkTx(normDate(date), desc, val));
   };
 
+  const hasEnough = body => {
+    const b = body.replace(/- (\d)/g, '-$1');
+    return [...b.matchAll(monRe())].length >= 2;
+  };
+
+  let pend = null;
   for (const line of lines) {
-    if (skip.test(line.trim())) { pend=null; continue; }
-    const dm = line.match(dateFullRe);
+    const t = line.trim();
+    if (!t || skip.test(t)) { if (pend) { fail++; pend=null; } continue; }
+    const dm = t.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.*)/);
     if (dm) {
-      if (pend) { fail++; pend=null; }
-      const rest = line.replace(dateFullRe,'').trim();
-      if (rest.includes('R$')) {
-        commit(dm[1], rest);
-      } else {
-        pend = { date:dm[1], text:rest };
-      }
+      if (pend) commit(pend.date, pend.body);
+      const body = dm[2];
+      if (hasEnough(body)) { commit(dm[1], body); pend = null; }
+      else pend = { date: dm[1], body };
     } else if (pend) {
-      pend.text += ' '+line.trim();
-      if (pend.text.includes('R$')) {
-        commit(pend.date, pend.text);
-        pend=null;
-      }
+      pend.body += ' ' + t;
+      if (hasEnough(pend.body)) { commit(pend.date, pend.body); pend = null; }
     }
   }
-  if (pend) commit(pend.date, pend.text);
+  if (pend) commit(pend.date, pend.body);
+  return { transactions:tx, failures:fail };
+}
+
+/* Asaas — layout 3 colunas (Data | Movimentações | Valor)
+   pdf.js pode intercalar linhas; ancora em R$ e busca data/descrição ao redor.
+*/
+function parseAsaas(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^Data\s+Movimentações|^ASAAS\s+Gestão|^Saldo\s+inicial|^Saldo\s+final|^Extrato\s+gerado|^Período\s/i;
+  const amRe = /R\$\s*(-?[\d.]+,\d{2})/;
+  const consumed = new Set();
+
+  for (let i = 0; i < lines.length; i++) {
+    if (consumed.has(i)) continue;
+    const t = lines[i].trim();
+    if (!t || skip.test(t)) continue;
+    if (!t.includes('R$')) continue;
+
+    const am = t.match(amRe);
+    if (!am) continue;
+    const val = parseAmt(am[1]);
+    if (isNaN(val) || val === 0) { fail++; consumed.add(i); continue; }
+    consumed.add(i);
+
+    const rsIdx = t.indexOf('R$');
+    const beforeR = t.slice(0, rsIdx).trim();
+    let date = null, desc = '';
+
+    const dmB = beforeR.match(/^(\d{2}\/\d{2}\/\d{4})\s*(.*)/);
+    if (dmB) {
+      date = dmB[1];
+      desc = dmB[2].trim();
+      // desc empty → look at previous line
+      if (!desc && i > 0 && !consumed.has(i - 1)) {
+        const prev = lines[i - 1].trim();
+        if (prev && !skip.test(prev) && !prev.includes('R$') && !/^\d{2}\/\d{2}\/\d{4}/.test(prev)) {
+          desc = prev;
+          consumed.add(i - 1);
+        }
+      }
+    } else {
+      // No date on R$ line — look backward
+      desc = beforeR;
+      for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+        if (consumed.has(j)) break;
+        const prev = lines[j].trim();
+        if (!prev || skip.test(prev)) continue;
+        const pdm = prev.match(/^(\d{2}\/\d{2}\/\d{4})\s*(.*)/);
+        if (pdm) {
+          date = pdm[1];
+          const after = pdm[2].trim();
+          if (after) desc = after + (desc ? ' ' + desc : '');
+          consumed.add(j);
+          // check j-1 for description before date
+          if (!desc && j > 0 && !consumed.has(j - 1)) {
+            const pp = lines[j - 1].trim();
+            if (pp && !skip.test(pp) && !pp.includes('R$') && !/^\d{2}\/\d{2}\/\d{4}/.test(pp)) {
+              desc = pp;
+              consumed.add(j - 1);
+            }
+          }
+          break;
+        }
+        if (!prev.includes('R$')) { desc = prev + (desc ? ' ' + desc : ''); consumed.add(j); }
+      }
+    }
+
+    if (!date) { fail++; continue; }
+    desc = desc.replace(/\s+/g, ' ').trim().slice(0, 80);
+    tx.push(mkTx(normDate(date), desc || 'Transação', val));
+  }
   return { transactions:tx, failures:fail };
 }
 
@@ -1477,6 +1555,30 @@ function parseSpreadsheetRows(rows) {
   return { transactions: tx, failures: fail };
 }
 
+/* Cora SCFI — extrato reverso com agrupamento por "Saldo do dia"
+   Transações: [+/-] R$ VALOR DESCRIÇÃO CONTRAPARTE CPF/CNPJ
+   CPF/CNPJ mantido na descrição conforme solicitado.
+*/
+function parseCora(lines) {
+  const tx = []; let fail = 0;
+  const skip = /^Cora\s+SCFI|^Extrato\s+de\s+conta|^CNPJ|^Conta\s+Pagamento|^Período|^Agência|^Saldo\s+inicial|^Saldo\s+final|^Data\s+|^Movimentações|^Entradas|^Saídas|^Saldo\s+do\s+período/i;
+  let curDate = null;
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || skip.test(t)) continue;
+    const sdm = t.match(/^(\d{2}\/\d{2}\/\d{4})\s+Saldo\s+do\s+dia/i);
+    if (sdm) { curDate = sdm[1]; continue; }
+    const txm = t.match(/^([+-])\s*R\$\s*([\d.]+,\d{2})\s+(.*)/);
+    if (!txm || !curDate) continue;
+    const val = parseAmt(txm[2]) * (txm[1] === '+' ? 1 : -1);
+    if (isNaN(val) || val === 0) { fail++; continue; }
+    const desc = txm[3].replace(/…/g, '').replace(/\s+/g, ' ').trim();
+    tx.push({ date: normDate(curDate), desc: desc.slice(0, 100) || 'Transação', amount: val, type: val >= 0 ? 'CREDIT' : 'DEBIT' });
+  }
+  return { transactions:tx, failures:fail };
+}
+
 // ── Dispatch ──────────────────────────────────────────────────────────────
 function runParser(key, lines, items=[]) {
   const yr = parseInt(document.getElementById('yearInput').value)||new Date().getFullYear();
@@ -1496,6 +1598,7 @@ function runParser(key, lines, items=[]) {
     case 'sicredi':   return parseSicredi(lines);
     case 'unicred':   return parseUnicred(lines);
     case 'asaas':     return parseAsaas(lines);
+    case 'cora':      return parseCora(lines);
     case 'sicoob':    return parseSicoob(lines);
     case 'sicoob_b':  return parseSicoobB(lines);
     default:          return { transactions:[], failures:0 };
@@ -1517,8 +1620,9 @@ function autoFill(text, key) {
     nubank:    { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
     pagbank:   { br:/Agência\s+(\d+)/i,        ac:/Conta\s+([\d-]+)/i },
     sicredi:   { br:/Cooperativa:\s*(\d+)/i,   ac:/Conta:\s*([\d-]+)/i },
-    unicred:   { br:/AG:\s*(\d+)/i,            ac:/Conta:\s*(\d+)/i },
-    asaas:     { br:/Agência:\s*(\d+)/i,       ac:/Conta:\s*([\d\s-]+)/i },
+    unicred:   { br:/(?:Agência|AG):\s*([\d-]+)/i, ac:/CONTA:\s*(\d+)/i },
+    asaas:     { br:/Agência:\s*(\d+)/i,          ac:/Conta:\s*([\d\s-]+)/i },
+    cora:      { br:/Ag[eê]ncia:\s*(\d+)/i,       ac:/Conta:\s*([\d\-]+)/i },
     sicoob:    { br:/Cooperativa:\s*([\d-]+)/i, ac:/Conta:\s*([\d.-]+)/i },
     sicoob_b:  { br:/Cooperativa:\s*([\d-]+)/i, ac:/Conta:\s*([\d.-]+)/i },
   };
@@ -1536,6 +1640,7 @@ const ALL_BANK_OPTS = [
   {v:'bradesco', l:'Bradesco'},
   {v:'c6bank',   l:'C6 Bank'},
   {v:'caixa',    l:'Caixa Econômica Federal'},
+  {v:'cora',     l:'Cora'},
   {v:'daycoval', l:'Daycoval'},
   {v:'inter',    l:'Banco Inter'},
   {v:'itau_bba', l:'Itaú / Itaú BBA'},
