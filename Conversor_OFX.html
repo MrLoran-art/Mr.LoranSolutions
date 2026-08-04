@@ -187,6 +187,34 @@
 <button class="scroll-btn" onclick="window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})" title="Ir ao final da página">&#8964;</button>
 </div>
 <script>
+/*
+ * Conversor Extrato → OFX
+ * Bancos e layouts suportados:
+ *
+ * Asaas           (461) — PDF 3 colunas (Data | Movimentações | Valor)
+ * Banco do Brasil (001) — Layout A (antigo) e Layout B (novo)
+ * Bradesco        (237) — Extrato padrão
+ * C6 Bank         (336) — Extrato padrão
+ * Caixa Econômica (104) — Extrato padrão
+ * Cora SCFI       (403) — Extrato reverso, agrupado por "Saldo do dia"
+ * Daycoval        (707) — Extrato padrão
+ * Banco Inter     (077) — Extrato padrão
+ * Itaú / Itaú BBA (341) — Extrato padrão
+ * Nubank          (260) — Extrato padrão
+ * PagBank         (290) — Extrato padrão
+ * Santander       (033) — Layouts 1–4 (Internet Banking, PJ, Empresas, Consolidado)
+ * Sicoob          (756) — Layout A (padrão) e Layout B (Internet Banking)
+ * Sicredi         (748) — Extrato padrão
+ * Stone           (197) — Extrato padrão
+ * Unicred         (136) — L1: DATA MOV. | ID. DOC | HISTÓRICO | LANÇAMENTOS | SALDO
+ *                          L2: Lançamentos Saldo (R$) Data Valor (R$) — delta de saldo p/ sinal
+ * Viacredi/Ailos  (085) — Layouts 1–4:
+ *                          L1: PDF posições X, colunas CRÉDITO/DÉBITO
+ *                          L2: Extrato Especial texto puro, sufixo C|D
+ *                          L3: Novo layout Ailos (Emitido em: com dois-pontos)
+ *                          L4: Layout antigo com coluna DOCUMENTO (Emitido em sem dois-pontos)
+ * Planilha        (000) — CSV / XLSX (colunas: Data, Histórico, Valor)
+ */
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 let transactions  = [];
@@ -1198,11 +1226,11 @@ function parseSicredi(lines) {
   return { transactions:tx, failures:fail };
 }
 
-/* Unicred — formato DATA MOV. | ID. DOC | HISTÓRICO | LANÇAMENTOS | SALDO
+/* Unicred L1 — formato DATA MOV. | ID. DOC | HISTÓRICO | LANÇAMENTOS | SALDO
    Sinal já embutido no LANÇAMENTOS (positivo=crédito, negativo=débito).
    Trata quebras de linha: normaliza "- dígito" → "-dígito" antes de extrair valores.
 */
-function parseUnicred(lines) {
+function parseUnicredDataMov(lines) {
   const tx = []; let fail = 0;
   const skip = /^DATA\s+MOV|^ID\.\s*DOC|^Saldo\s+em\s+\d|^Saldo\s+no\s+final|^Saldo\s+[Ff]inal|^Saldo\s+anterior|^Saldo\s+atual|^Saldo\s+em\s+conta|^Total\s+de\s+[cdCD]|^Total\s+disponível|^Saldo\s+bloqueado|^Limite\s+de|^CENTRAL\s+DE|^Período\s|^Solicitado|Lançamentos\s+futuros|^\d+\/\d+\s*$|^0800\s|^Extrato\s*$|^CONTA:|^Ag[eê]ncia|^Unicred\b|^Central\s+de\s+Relacionamento/i;
   const monRe = () => /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
@@ -1241,6 +1269,74 @@ function parseUnicred(lines) {
   }
   if (pend) commit(pend.date, pend.body);
   return { transactions:tx, failures:fail };
+}
+
+/* Unicred L2 — layout "Lançamentos Saldo (R$) Data Valor (R$)"
+   Cada transação ocupa 2-3 linhas:
+     HISTORICO ( Doc.: NUM /   ← linha de descrição
+     DD/MM/YYYY  R$ SALDO [- ]R$ VALOR  ← linha de data
+     CONTINUAÇÃO )             ← opcional, ignorada
+   Transações simples podem ter tudo na linha da data:
+     DD/MM/YYYY  HISTORICO ( Doc.: NUM )  R$ SALDO [- ]R$ VALOR
+   Sinal detectado por delta de saldo (saldo atual vs. anterior).
+*/
+function parseUnicredNew(lines) {
+  const tx = []; let fail = 0;
+  const skipRe = /^Lançamentos\s+Saldo|^Valor\s+\(R\$\)\s+Data|^CENTRAL\s+DE\s+RELACIONAMENTO|^0800\s|^Pág\.\s+\d|^Saldo\s+no\s+final|^Saldo\s+atual|^Total\s+disponível|^Saldo\s+bloqueado|^Saldo\s+Bloqueado|^Limite\s+de|^IOF\s+R\$|^Juros\s+cheque|^Juros\s+adiant|^Tarifas\s+pendentes|^Saldo\s+em\s+\d|^Coop:|^Solicitado\s+por|^Período\s+de|^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}/i;
+  const monRe = () => /\d{1,3}(?:\.\d{3})*,\d{2}/g;
+
+  let prevSaldo = NaN;
+  for (const line of lines) {
+    const m = line.match(/Saldo em \d{2}\/\d{2}\/\d{4}:\s*R\$\s*([\d.]+,\d{2})/i);
+    if (m) { prevSaldo = parseAmt(m[1]); break; }
+  }
+
+  const dateRe = /^(\d{2}\/\d{2}\/\d{4})\s+(.*)/;
+  let pendingDesc = '';
+
+  for (const line of lines) {
+    if (/Lançamentos\s+futuros/i.test(line)) break;
+    const t = line.trim();
+    if (!t || skipRe.test(t)) { pendingDesc = ''; continue; }
+
+    const dm = t.match(dateRe);
+    if (dm) {
+      const date = dm[1], rest = dm[2];
+      const ams = [...rest.matchAll(monRe())];
+      if (ams.length < 2) { fail++; pendingDesc = ''; continue; }
+
+      const saldoAm  = ams[ams.length - 2];
+      const saldoIdx = saldoAm.index;
+      const beforeSaldo = rest.slice(Math.max(0, saldoIdx - 6), saldoIdx);
+      const saldo = (/-/.test(beforeSaldo) ? -1 : 1) * parseAmt(saldoAm[0]);
+      const val   = parseAmt(ams[ams.length - 1][0]);
+      const signedVal = isNaN(prevSaldo) ? val : (saldo >= prevSaldo ? val : -val);
+      prevSaldo = saldo;
+
+      if (isNaN(signedVal) || signedVal === 0) { fail++; pendingDesc = ''; continue; }
+
+      let desc = pendingDesc;
+      if (!desc) {
+        const firstAmt = rest.search(/\d{1,3}(?:\.\d{3})*,\d{2}/);
+        const before = (firstAmt > 0 ? rest.slice(0, firstAmt) : '').replace(/[−-]?\s*R\$\s*$/, '').trim();
+        desc = before.replace(/\s*\(\s*Doc\.:[^)]*\)?\s*$/, '').trim();
+      }
+      pendingDesc = '';
+      desc = (desc || 'Transação').replace(/\s+/g, ' ').trim().slice(0, 80);
+      tx.push(mkTx(normDate(date), desc, signedVal));
+    } else {
+      if (t.includes('( Doc.:'))
+        pendingDesc = t.replace(/\s*\(\s*Doc\.:[^)]*\)?\s*$/, '').trim();
+    }
+  }
+  return { transactions: tx, failures: fail };
+}
+
+/* Unicred — dispatcher: detecta layout pelo cabeçalho */
+function parseUnicred(lines) {
+  if (lines.some(l => /Lançamentos\s+Saldo\s+\(R\$\)/i.test(l)))
+    return parseUnicredNew(lines);
+  return parseUnicredDataMov(lines);
 }
 
 /* Asaas — layout 3 colunas (Data | Movimentações | Valor)
