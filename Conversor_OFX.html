@@ -1856,9 +1856,26 @@ function logMsg(msg,cls=''){
 }
 
 function groupLines(items){
-  const byY={};
-  items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byY[y])byY[y]=[];byY[y].push(it.str);});
-  return Object.keys(byY).sort((a,b)=>b-a).map(y=>byY[y].join(' ').trim().normalize('NFC')).filter(l=>l);
+  // Agrupa por Y com tolerância (baselines de colunas diferentes podem ter Y
+  // ligeiramente distintos dentro da mesma linha visual, ex: Viacredi/Ailos
+  // onde DESCRIÇÃO fica ~0.5pt deslocada de DATA/DOCUMENTO/VALORES) e ordena
+  // por X dentro de cada linha (a ordem dos items no content stream do PDF
+  // nem sempre é da esquerda para a direita).
+  const Y_TOL = 2;
+  const pts = items
+    .filter(it => it.str && it.str.trim())
+    .map(it => ({ y: it.transform[5], x: it.transform[4], text: it.str }));
+  pts.sort((a,b) => b.y - a.y || a.x - b.x);
+
+  const rows = [];
+  for (const p of pts) {
+    let row = rows.length && Math.abs(rows[rows.length-1].y - p.y) <= Y_TOL ? rows[rows.length-1] : null;
+    if (!row) { row = { y: p.y, items: [] }; rows.push(row); }
+    row.items.push(p);
+  }
+  return rows
+    .map(row => row.items.sort((a,b)=>a.x-b.x).map(i=>i.text).join(' ').trim().normalize('NFC'))
+    .filter(l=>l);
 }
 
 async function processSpreadsheet(file) {
